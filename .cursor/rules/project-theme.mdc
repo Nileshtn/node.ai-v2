@@ -1,0 +1,42 @@
+---
+description: Overall product theme, project memory, and standing instructions for Visual Builder
+alwaysApply: true
+---
+
+# Visual Builder Project Memory
+
+Always read and follow this rule when working in this repository. If the user gives a new lasting instruction, product direction, naming decision, workflow preference, or architectural idea, update this file in the same change so future sessions inherit it.
+only do the thing asked for, do do anything more or less
+## Product Theme
+
+- The app is a desktop-first visual programming environment for building AI workflows and AI-powered applications with drag-and-drop nodes.
+- The working product name shown in the UI is `Node.ai`; the repository/project name is `Node.ai`.
+- The long-term idea is "PyTorch, but visual programming for AI applications": users design AI systems visually, run them locally through Python, debug every step, and later package workflows into usable apps.
+- Keep the product local-first before cloud features. Prefer reliable MVP behavior over broad feature surfaces.
+
+## Current Technical Direction
+
+- UI is built with Qt/QML through the existing Conda environment named `pyqt`.
+- Use `conda run -n pyqt ...` for checks from agent shells unless already inside `(pyqt)`.
+- The user commonly launches the app from `D:\project\visual_builder\app` with `python main.py` inside the `(pyqt)` environment.
+- QML should stay focused on interaction and presentation; Python should own serious runtime behavior, validation, execution, storage, and bridges.
+- Preserve the current dark desktop UI style and keep changes incremental.
+
+## Current UI Direction
+
+- The top menu bar should include `File`, `Edit`, `View`, `Node`, `Run`, `Window`, and `Help`.
+- `Edit` basics: undo, redo, select all, delete, preferences.
+- `View` basics: view origin, view selected, view all, go to start node, go to end node, plus useful zoom commands.
+- `Node` should include `Mathematics` as an arrow-marked submenu that opens to the side with `Add`, `Sub`, `Mul`, and `Button`; do not create actual nodes until asked.
+- `Run` basics: run, debug, stop, compute selected, compute before, compute after.
+- `Window` should include options for toolbar, component bar, info/status bar, reset layout, and future dockable panels; do not create the actual panels until asked.
+- `Help` basics: about, update/check for updates, keyboard shortcuts, documentation.
+
+## Working Preferences
+
+- Read the existing QML/Python structure before editing.
+- Keep edits scoped and avoid unrelated refactors.
+- Build new features so they can scale later without a rewrite: clear component boundaries, readable names, and simple extension points.
+- Keep code easy for the user to debug: prefer straightforward control flow, visible state, small functions/components, and clear status/error messages.
+- If a change creates a reusable project decision, update this rule.
+- Do not use plain `python` from a fresh shell for verification; use the `pyqt` Conda environment.
