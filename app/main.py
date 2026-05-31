@@ -7,6 +7,8 @@ from PySide6.QtCore import QUrl
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtQml import QQmlApplicationEngine
 
+from backend.graph_runtime import GraphRuntime
+
 
 def main() -> int:
     app = QGuiApplication(sys.argv)
@@ -14,6 +16,9 @@ def main() -> int:
     app.setOrganizationName("Node.ai")
 
     engine = QQmlApplicationEngine()
+    graph_runtime = GraphRuntime()
+    engine.rootContext().setContextProperty("graphRuntime", graph_runtime)
+
     qml_path = Path(__file__).resolve().parent / "qml" / "Main.qml"
     engine.load(QUrl.fromLocalFile(str(qml_path)))
 

@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import "../theme"
 
 Rectangle {
     id: root
@@ -195,7 +196,10 @@ Rectangle {
         modal: false
         focus: true
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-        onClosed: mathMenu.close()
+        onClosed: {
+            mathMenu.close()
+            varMenu.close()
+        }
 
         background: Rectangle {
             color: colors.menuBarBackground
@@ -208,11 +212,46 @@ Rectangle {
             spacing: 2
 
             AppMenuItem {
-                text: "Mathematics"
+                text: "Math"
                 hasSubmenu: true
 
-                onHovered: mathMenu.open()
-                onTriggered: mathMenu.open()
+                onHovered: {
+                    varMenu.close()
+                    mathMenu.open()
+                }
+                onTriggered: {
+                    varMenu.close()
+                    mathMenu.open()
+                }
+            }
+
+            AppMenuItem {
+                text: "Var"
+                hasSubmenu: true
+
+                onHovered: {
+                    mathMenu.close()
+                    varMenu.open()
+                }
+                onTriggered: {
+                    mathMenu.close()
+                    varMenu.open()
+                }
+            }
+
+            AppMenuItem {
+                text: "Lookup"
+
+                onHovered: {
+                    mathMenu.close()
+                    varMenu.close()
+                }
+                onTriggered: {
+                    mathMenu.close()
+                    varMenu.close()
+                    nodeMenu.close()
+                    root.actionTriggered("Lookup")
+                }
             }
         }
     }
@@ -228,6 +267,23 @@ Rectangle {
             { "text": "Sub" },
             { "text": "Mul" },
             { "text": "Button" }
+        ]
+    }
+
+    AppMenuPopup {
+        id: varMenu
+
+        closeWith: nodeMenu
+        x: nodeMenu.x + nodeMenu.width + width < root.width ? nodeMenu.x + nodeMenu.width - 2 : nodeMenu.x - width + 2
+        y: nodeMenu.y + nodeMenu.padding + 28
+        actions: [
+            { "text": "Int" },
+            { "text": "Float" },
+            { "text": "Vector 2D" },
+            { "text": "Vector 3D" },
+            { "text": "Vector 4D" },
+            { "text": "Bool" },
+            { "text": "Str" }
         ]
     }
 

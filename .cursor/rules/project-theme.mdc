@@ -27,7 +27,7 @@ only do the thing asked for, do do anything more or less
 - The top menu bar should include `File`, `Edit`, `View`, `Node`, `Run`, `Window`, and `Help`.
 - `Edit` basics: undo, redo, select all, delete, preferences.
 - `View` basics: view origin, view selected, view all, go to start node, go to end node, plus useful zoom commands.
-- `Node` should include `Mathematics` as an arrow-marked submenu that opens to the side with `Add`, `Sub`, `Mul`, and `Button`; do not create actual nodes until asked.
+- `Node` should include arrow-marked side submenus: `Math` with `Add`, `Sub`, `Mul`, and `Button`; `Var` with `Int`, `Float`, `Vector 2D`, `Vector 3D`, `Vector 4D`, `Bool`, and `Str`; and a `Lookup` node option. `Add` creates a basic visual math node; `Int` creates an int variable node with a numeric text box, `+`/`-` controls, and a themed int type selector that clamps values to the selected signed int range; `Lookup` accepts any output connection and displays/prints the connected value when available.
 - `Run` basics: run, debug, stop, compute selected, compute before, compute after.
 - `Window` should include options for toolbar, component bar, info/status bar, reset layout, and future dockable panels; do not create the actual panels until asked.
 - `Help` basics: about, update/check for updates, keyboard shortcuts, documentation.
@@ -37,6 +37,12 @@ only do the thing asked for, do do anything more or less
 - Read the existing QML/Python structure before editing.
 - Keep edits scoped and avoid unrelated refactors.
 - Build new features so they can scale later without a rewrite: clear component boundaries, readable names, and simple extension points.
+- Keep visual node components in their own QML files. Use `Node.qml` as the reusable base template, `NodeSocket.qml` for input/output sockets, and specific files like `AddNode.qml` for concrete nodes; canvases should position and instantiate nodes, not contain full node UI bodies.
+- Node visuals should use shared `AppColors` theme tokens with the older large plain title style on the node body, readable property controls in the center, and clearly labeled side sockets. Sockets should be small circular connectors mounted on the left/right node edge. Concrete nodes can vary the controls based on their properties, but should keep this shared visual language.
+- For custom node UI controls, use primitive QML pieces such as `Rectangle`, `TextInput`, `Label`, `MouseArea`, `Popup`, and `ListView`. Do not customize native Qt Quick Controls like `Button`, `TextField`, or `ComboBox` backgrounds/content/indicators because the native style emits warnings; build warning-free custom controls from primitives instead.
+- Node sizes should reserve space for the largest expected property display so changing options does not visually resize or jump the node.
+- Selection and drag movement belong in the reusable base node behavior so every concrete node can be selected and moved on the canvas.
+- Node connections should behave like Blender Geometry Nodes: drag from an output socket to an input socket, show a curved noodle preview while dragging, and persist the curved connection after release. Dragging an existing connected output or input socket detaches the connection first; releasing on empty canvas leaves it disconnected, and releasing on another input reconnects it.
 - Keep code easy for the user to debug: prefer straightforward control flow, visible state, small functions/components, and clear status/error messages.
 - If a change creates a reusable project decision, update this rule.
 - Do not use plain `python` from a fresh shell for verification; use the `pyqt` Conda environment.
