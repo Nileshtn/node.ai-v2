@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import random
 from typing import Any
 
 from PySide6.QtCore import QObject, Slot
@@ -26,6 +27,16 @@ class GraphRuntime(QObject):
         "Bool",
         "Str",
         "Button",
+    }
+    GENERATOR_NODE_TYPES = {
+        "Random",
+        "Random Like",
+        "Ones",
+        "Ones Like",
+        "Zeros",
+        "Zeros Like",
+        "Random Int",
+        "Range",
     }
 
     @Slot("QVariant", "QVariant", result="QVariant")
@@ -67,6 +78,12 @@ class GraphRuntime(QObject):
 
             if node_type in self.VALUE_NODE_TYPES:
                 value = self._node_value(node_type, node.get("value", 0))
+            elif node_type in self.GENERATOR_NODE_TYPES:
+                value = self._generator_value(
+                    node_type,
+                    node.get("value", {}),
+                    lambda socket_name: resolve_input(node_index, socket_name, next_stack),
+                )
             elif node_type == "Add":
                 value = self._apply_binary_operation(
                     resolve_input(node_index, "a", next_stack),
@@ -154,6 +171,125 @@ class GraphRuntime(QObject):
             return str(value)
 
         return value
+
+    def _generator_value(self, node_type: str, value: Any, input_value: Any) -> Any:
+        params = value if isinstance(value, dict) else {}
+
+        if node_type == "Random":
+            return self._shape_value(params, lambda: random.uniform(0, 1))
+
+        if node_type == "Random Int":
+            minimum = int(self._number_param(params, "min", 0))
+            maximum = int(self._number_param(params, "max", 10))
+            low = min(minimum, maximum)
+            high = max(minimum, maximum)
+            return self._shape_value(params, lambda: random.randint(low, high))
+
+        if node_type == "Ones":
+            return self._shape_value(params, lambda: 1)
+
+        if node_type == "Zeros":
+            return self._shape_value(params, lambda: 0)
+
+        if node_type == "Range":
+            return self._range_values(
+                self._number_param(params, "start", 0),
+                self._number_param(params, "stop", 10),
+                self._number_param(params, "step", 1),
+            )
+
+        if node_type == "Random Like":
+            return self._like_value(input_value("like"), lambda: random.uniform(0, 1))
+
+        if node_type == "Ones Like":
+            return self._like_value(input_value("like"), lambda: 1)
+
+        if node_type == "Zeros Like":
+            return self._like_value(input_value("like"), lambda: 0)
+
+        raise ValueError(f"{node_type} is not supported.")
+
+    def _number_param(self, params: dict[str, Any], key: str, default: float) -> float:
+        try:
+            return float(params.get(key, default))
+        except (TypeError, ValueError):
+            return default
+
+    def _count_param(self, params: dict[str, Any]) -> int:
+        return max(1, int(self._number_param(params, "count", 1)))
+
+    def _shape_value(self, params: dict[str, Any], make_value: Any) -> Any:
+        shape = self._shape_param(params)
+
+        if not shape:
+            return make_value()
+
+        return self._build_shape(shape, make_value)
+
+    def _shape_param(self, params: dict[str, Any]) -> list[int]:
+        raw_shape = params.get("shape", params.get("count", "1"))
+
+        if isinstance(raw_shape, (int, float)):
+            return [max(1, int(raw_shape))]
+
+        if isinstance(raw_shape, list):
+            return [max(1, int(float(part))) for part in raw_shape if self._shape_part_valid(part)]
+
+        shape_text = str(raw_shape).strip()
+
+        if not shape_text:
+            return [1]
+
+        for character in "[]()":
+            shape_text = shape_text.replace(character, "")
+
+        shape_text = shape_text.replace("x", ",").replace("X", ",")
+        parts = [part.strip() for part in shape_text.split(",") if part.strip()]
+        shape = [max(1, int(float(part))) for part in parts if self._shape_part_valid(part)]
+
+        return shape or [1]
+
+    def _shape_part_valid(self, value: Any) -> bool:
+        try:
+            float(value)
+        except (TypeError, ValueError):
+            return False
+
+        return True
+
+    def _build_shape(self, shape: list[int], make_value: Any) -> Any:
+        total_size = 1
+
+        for dimension in shape:
+            total_size *= dimension
+
+            if total_size > 1000:
+                raise ValueError("Shape is too large. Use 1000 values or fewer.")
+
+        if len(shape) == 1:
+            return [make_value() for _ in range(shape[0])]
+
+        return [self._build_shape(shape[1:], make_value) for _ in range(shape[0])]
+
+    def _range_values(self, start: float, stop: float, step: float) -> list[float]:
+        if step == 0:
+            raise ValueError("Range step cannot be 0.")
+
+        values: list[float] = []
+        current = start
+        limit = 1000
+
+        while len(values) < limit and ((step > 0 and current < stop) or (step < 0 and current > stop)):
+            values.append(current)
+            current += step
+
+        return values
+
+    def _like_value(self, source: Any, make_value: Any) -> Any:
+        if isinstance(source, list):
+            return [self._like_value(item, make_value) for item in source]
+
+        return make_value()
 
     def _apply_binary_operation(self, left: Any, right: Any, operation: str) -> Any:
         if isinstance(left, str) or isinstance(right, str):

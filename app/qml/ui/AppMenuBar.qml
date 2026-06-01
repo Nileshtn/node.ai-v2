@@ -199,6 +199,7 @@ Rectangle {
         onClosed: {
             mathMenu.close()
             varMenu.close()
+            generatorMenu.close()
         }
 
         background: Rectangle {
@@ -217,10 +218,12 @@ Rectangle {
 
                 onHovered: {
                     varMenu.close()
+                    generatorMenu.close()
                     mathMenu.open()
                 }
                 onTriggered: {
                     varMenu.close()
+                    generatorMenu.close()
                     mathMenu.open()
                 }
             }
@@ -231,11 +234,29 @@ Rectangle {
 
                 onHovered: {
                     mathMenu.close()
+                    generatorMenu.close()
                     varMenu.open()
                 }
                 onTriggered: {
                     mathMenu.close()
+                    generatorMenu.close()
                     varMenu.open()
+                }
+            }
+
+            AppMenuItem {
+                text: "Generators"
+                hasSubmenu: true
+
+                onHovered: {
+                    mathMenu.close()
+                    varMenu.close()
+                    generatorMenu.open()
+                }
+                onTriggered: {
+                    mathMenu.close()
+                    varMenu.close()
+                    generatorMenu.open()
                 }
             }
 
@@ -245,10 +266,12 @@ Rectangle {
                 onHovered: {
                     mathMenu.close()
                     varMenu.close()
+                    generatorMenu.close()
                 }
                 onTriggered: {
                     mathMenu.close()
                     varMenu.close()
+                    generatorMenu.close()
                     nodeMenu.close()
                     root.actionTriggered("Lookup")
                 }
@@ -284,6 +307,24 @@ Rectangle {
             { "text": "Vector 4D" },
             { "text": "Bool" },
             { "text": "Str" }
+        ]
+    }
+
+    AppMenuPopup {
+        id: generatorMenu
+
+        closeWith: nodeMenu
+        x: nodeMenu.x + nodeMenu.width + width < root.width ? nodeMenu.x + nodeMenu.width - 2 : nodeMenu.x - width + 2
+        y: nodeMenu.y + nodeMenu.padding + 56
+        actions: [
+            { "text": "Random" },
+            { "text": "Random Like" },
+            { "text": "Ones" },
+            { "text": "Ones Like" },
+            { "text": "Zeros" },
+            { "text": "Zeros Like" },
+            { "text": "Random Int" },
+            { "text": "Range" }
         ]
     }
 

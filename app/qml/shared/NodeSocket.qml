@@ -11,6 +11,7 @@ Item {
 
     property string label: ""
     property string side: "left"
+    property real nodeEdgeInset: 20
     readonly property AppColors colors: AppColors {}
 
     width: 96
@@ -27,7 +28,7 @@ Item {
         height: 12
         radius: 6
         anchors.verticalCenter: parent.verticalCenter
-        x: root.side === "left" ? -6 : root.width - 6
+        x: root.side === "left" ? -root.nodeEdgeInset - width / 2 : root.width + root.nodeEdgeInset - width / 2
         color: colors.nodeSocket
         border.color: colors.nodeBackground
         border.width: 1
@@ -36,7 +37,10 @@ Item {
     MouseArea {
         id: socketMouseArea
 
-        anchors.fill: parent
+        x: Math.min(0, socketDot.x)
+        y: 0
+        width: Math.max(root.width, socketDot.x + socketDot.width) - x
+        height: root.height
         acceptedButtons: Qt.LeftButton
         hoverEnabled: true
 

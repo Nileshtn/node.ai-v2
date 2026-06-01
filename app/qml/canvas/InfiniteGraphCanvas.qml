@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import "../nodes/generators"
 import "../nodes/math"
 import "../nodes/utility"
 import "../nodes/values"
@@ -23,6 +24,7 @@ Item {
     property color textColor: colors.textMuted
     property int selectedNodeIndex: -1
     property var selectedNodeIndices: []
+    property int hoveredNodeIndex: -1
     property bool isConnecting: false
     property int connectionSourceNodeIndex: -1
     property string connectionSourceSocket: ""
@@ -84,6 +86,25 @@ Item {
         selectedNodeIndex = -1
     }
 
+    function setHoveredNode(nodeIndex, hovered) {
+        if (hovered) {
+            hoveredNodeIndex = nodeIndex
+        } else if (hoveredNodeIndex === nodeIndex) {
+            hoveredNodeIndex = -1
+        }
+    }
+
+    function clearProject() {
+        graphConnections.clear()
+        graphNodes.clear()
+        clearSelection()
+        isConnecting = false
+        isCuttingConnections = false
+        connectionCutPoints = []
+        viewOrigin()
+        graphComputed("New project ready", "INFO")
+    }
+
     function createMathNode(nodeType) {
         var center = visibleCenterWorldPosition()
 
@@ -112,6 +133,34 @@ Item {
         requestConnectionPaint()
     }
 
+    function generatorDefaultValue(nodeType) {
+        if (nodeType === "Random") {
+            return { "shape": "3" }
+        } else if (nodeType === "Random Int") {
+            return { "shape": "3", "min": 0, "max": 10 }
+        } else if (nodeType === "Ones" || nodeType === "Zeros") {
+            return { "shape": "3" }
+        } else if (nodeType === "Range") {
+            return { "start": 0, "stop": 10, "step": 1 }
+        }
+
+        return {}
+    }
+
+    function createGeneratorNode(nodeType) {
+        var center = visibleCenterWorldPosition()
+
+        graphNodes.append({
+            "type": nodeType,
+            "worldX": center.x,
+            "worldY": center.y,
+            "value": generatorDefaultValue(nodeType),
+            "displayValue": ""
+        })
+        selectNode(graphNodes.count - 1, false)
+        requestConnectionPaint()
+    }
+
     function createUtilityNode(nodeType) {
         var center = visibleCenterWorldPosition()
 
@@ -128,8 +177,12 @@ Item {
 
     function deleteSelectedNodes() {
         if (selectedNodeIndices.length === 0) {
-            graphComputed("No selected nodes to delete", "INFO")
-            return
+            if (hoveredNodeIndex < 0 || hoveredNodeIndex >= graphNodes.count) {
+                graphComputed("No selected nodes to delete", "INFO")
+                return
+            }
+
+            selectNode(hoveredNodeIndex, false)
         }
 
         var selectedLookup = {}
@@ -179,6 +232,7 @@ Item {
 
         var deletedCount = selectedNodeIndices.length
         clearSelection()
+        hoveredNodeIndex = -1
         computeGraph()
         requestConnectionPaint()
         graphComputed("Deleted " + deletedCount + (deletedCount === 1 ? " node" : " nodes"), "INFO")
@@ -511,6 +565,30 @@ Item {
         return nodes
     }
 
+    function projectNodeSnapshot() {
+        var nodes = []
+
+        for (var nodeIndex = 0; nodeIndex < graphNodes.count; nodeIndex += 1) {
+            var node = graphNodes.get(nodeIndex)
+            var nodeDelegate = nodeRepeater.itemAt(nodeIndex)
+            var nodeValue = node.value === undefined ? 0 : node.value
+
+            if (nodeDelegate && nodeDelegate.nodeItem && nodeDelegate.nodeItem.value !== undefined) {
+                nodeValue = nodeDelegate.nodeItem.value
+            }
+
+            nodes.push({
+                "type": node.type,
+                "worldX": node.worldX,
+                "worldY": node.worldY,
+                "value": nodeValue,
+                "displayValue": node.displayValue || ""
+            })
+        }
+
+        return nodes
+    }
+
     function graphConnectionSnapshot() {
         var connections = []
 
@@ -526,6 +604,71 @@ Item {
         }
 
         return connections
+    }
+
+    function projectSnapshot() {
+        return {
+            "format": "node.ai.project",
+            "version": 1,
+            "view": {
+                "zoom": zoom,
+                "offsetX": offsetX,
+                "offsetY": offsetY
+            },
+            "nodes": projectNodeSnapshot(),
+            "connections": graphConnectionSnapshot()
+        }
+    }
+
+    function loadProject(project) {
+        if (!project || project.format !== "node.ai.project" || project.version !== 1) {
+            graphComputed("Project file is not supported", "ERROR")
+            return false
+        }
+
+        graphConnections.clear()
+        graphNodes.clear()
+        clearSelection()
+        isConnecting = false
+        isCuttingConnections = false
+        connectionCutPoints = []
+
+        var projectNodes = project.nodes || []
+
+        for (var nodeIndex = 0; nodeIndex < projectNodes.length; nodeIndex += 1) {
+            var node = projectNodes[nodeIndex]
+
+            graphNodes.append({
+                "type": node.type || "",
+                "worldX": node.worldX || 0,
+                "worldY": node.worldY || 0,
+                "value": node.value === undefined ? 0 : node.value,
+                "displayValue": node.displayValue || ""
+            })
+        }
+
+        var projectConnections = project.connections || []
+
+        for (var connectionIndex = 0; connectionIndex < projectConnections.length; connectionIndex += 1) {
+            var connection = projectConnections[connectionIndex]
+
+            graphConnections.append({
+                "sourceNodeIndex": connection.sourceNodeIndex,
+                "sourceSocket": connection.sourceSocket,
+                "targetNodeIndex": connection.targetNodeIndex,
+                "targetSocket": connection.targetSocket
+            })
+        }
+
+        var projectView = project.view || {}
+        zoom = projectView.zoom || 1.0
+        offsetX = projectView.offsetX === undefined ? width / 2 : projectView.offsetX
+        offsetY = projectView.offsetY === undefined ? height / 2 : projectView.offsetY
+        requestGridPaint()
+        requestConnectionPaint()
+        computeGraph()
+        graphComputed("Project loaded", "INFO")
+        return true
     }
 
     function applyLookupValues(lookupValues) {
@@ -825,6 +968,12 @@ Item {
                 id: nodeLoader
 
                 sourceComponent: root.componentForNodeType(model.type)
+
+                onLoaded: {
+                    if (item && item.value !== undefined && model.value !== undefined) {
+                        item.value = model.value
+                    }
+                }
             }
 
             Binding {
@@ -847,6 +996,14 @@ Item {
 
                 function onSelected(additiveSelection) {
                     root.selectNode(index, additiveSelection)
+                }
+
+                function onDeleteRequested() {
+                    root.deleteSelectedNodes()
+                }
+
+                function onNodeHoverChanged(hovered) {
+                    root.setHoveredNode(index, hovered)
                 }
 
                 function onMoved(screenDeltaX, screenDeltaY) {
@@ -884,6 +1041,22 @@ Item {
             return mulNodeComponent
         } else if (nodeType === "Button") {
             return buttonNodeComponent
+        } else if (nodeType === "Random") {
+            return randomNodeComponent
+        } else if (nodeType === "Random Like") {
+            return randomLikeNodeComponent
+        } else if (nodeType === "Ones") {
+            return onesNodeComponent
+        } else if (nodeType === "Ones Like") {
+            return onesLikeNodeComponent
+        } else if (nodeType === "Zeros") {
+            return zerosNodeComponent
+        } else if (nodeType === "Zeros Like") {
+            return zerosLikeNodeComponent
+        } else if (nodeType === "Random Int") {
+            return randomIntNodeComponent
+        } else if (nodeType === "Range") {
+            return rangeNodeComponent
         } else if (nodeType === "Int") {
             return intNodeComponent
         } else if (nodeType === "Float") {
@@ -927,6 +1100,54 @@ Item {
         id: buttonNodeComponent
 
         ButtonNode {}
+    }
+
+    Component {
+        id: randomNodeComponent
+
+        RandomNode {}
+    }
+
+    Component {
+        id: randomLikeNodeComponent
+
+        RandomLikeNode {}
+    }
+
+    Component {
+        id: onesNodeComponent
+
+        OnesNode {}
+    }
+
+    Component {
+        id: onesLikeNodeComponent
+
+        OnesLikeNode {}
+    }
+
+    Component {
+        id: zerosNodeComponent
+
+        ZerosNode {}
+    }
+
+    Component {
+        id: zerosLikeNodeComponent
+
+        ZerosLikeNode {}
+    }
+
+    Component {
+        id: randomIntNodeComponent
+
+        RandomIntNode {}
+    }
+
+    Component {
+        id: rangeNodeComponent
+
+        RangeNode {}
     }
 
     Component {

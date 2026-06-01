@@ -7,6 +7,8 @@ Rectangle {
     id: root
 
     signal selected(bool additiveSelection)
+    signal deleteRequested()
+    signal nodeHoverChanged(bool hovered)
     signal moved(real screenDeltaX, real screenDeltaY)
     signal connectionDragStarted(string socketLabel, string socketSide, real sceneX, real sceneY)
     signal connectionDragged(real sceneX, real sceneY)
@@ -41,6 +43,12 @@ Rectangle {
     border.color: isSelected ? colors.accent : colors.panelBorder
     border.width: isSelected ? 2 : 1
     clip: false
+
+    HoverHandler {
+        id: nodeHover
+
+        onHoveredChanged: root.nodeHoverChanged(hovered)
+    }
 
     ColumnLayout {
         anchors.fill: parent
