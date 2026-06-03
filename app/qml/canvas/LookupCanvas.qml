@@ -6,6 +6,7 @@ GraphCanvas {
     id: root
 
     property var entries: []
+    readonly property int entryCount: Array.isArray(entries) ? entries.length : 0
 
     gridEnabled: false
     panEnabled: false
@@ -18,9 +19,9 @@ GraphCanvas {
 
         Label {
             Layout.fillWidth: true
-            text: root.entries.length === 0
+            text: root.entryCount === 0
                   ? "Select Lookup nodes on the graph to see values."
-                  : root.entries.length === 1 ? "1 lookup node selected" : root.entries.length + " lookup nodes selected"
+                  : root.entryCount === 1 ? "1 lookup node selected" : root.entryCount + " lookup nodes selected"
             color: colors.textMuted
             font.pixelSize: 12
             wrapMode: Text.WordWrap

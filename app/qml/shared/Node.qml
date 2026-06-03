@@ -10,9 +10,9 @@ Rectangle {
     signal deleteRequested()
     signal nodeHoverChanged(bool hovered)
     signal moved(real screenDeltaX, real screenDeltaY)
-    signal connectionDragStarted(string socketId, string socketSide, real sceneX, real sceneY)
-    signal connectionDragged(real sceneX, real sceneY)
-    signal connectionDragFinished(real sceneX, real sceneY)
+    signal connectionDragStarted(string socketId, string socketSide, real canvasX, real canvasY)
+    signal connectionDragged(real canvasX, real canvasY)
+    signal connectionDragFinished(real canvasX, real canvasY)
     signal displayNameEdited(string newDisplayName)
     signal outputLabelsEdited(var labels)
 
@@ -20,13 +20,13 @@ Rectangle {
     property string defaultTitle: "Node"
     property string displayName: ""
     property var outputLabels: ({})
-    property bool editingDisplayName: false
-    property bool editingSocketLabel: false
-    readonly property bool renaming: editingDisplayName || editingSocketLabel
+    readonly property bool showDisplayNameRow: displayName.length > 0
     property string category: ""
     property var inputSockets: []
     property var outputSockets: []
     property bool isSelected: false
+    property Item graphCanvas: null
+    readonly property int outerMargin: 16
     readonly property AppColors colors: AppColors {}
 
     function isNodeTextInput(item) {
@@ -38,7 +38,7 @@ Rectangle {
             return outputLabels[socketId]
         }
 
-        return socketId
+        return ""
     }
 
     function setOutputLabel(socketId, labelText) {
@@ -54,49 +54,129 @@ Rectangle {
             delete nextLabels[socketId]
         }
 
-        outputLabels = nextLabels
         outputLabelsEdited(nextLabels)
+        outputLabels = nextLabels
     }
 
-    function beginDisplayNameEdit() {
-        if (root.editingDisplayName) {
-            return
+    function deepestChildAt(item, localX, localY) {
+        var child = item.childAt(localX, localY)
+
+        if (!child) {
+            return item
         }
 
-        root.editingDisplayName = true
-        displayNameInput.text = root.displayName
-        Qt.callLater(function() {
-            displayNameInput.forceActiveFocus()
-            displayNameInput.selectAll()
-        })
+        var mapped = item.mapToItem(child, localX, localY)
+        return deepestChildAt(child, mapped.x, mapped.y)
     }
 
-    function finishDisplayNameEdit() {
-        if (!root.editingDisplayName) {
-            return
+    function isSocketItem(item) {
+        return item && item.socketId !== undefined && typeof item.connectorCanvasPosition === "function"
+    }
+
+    function isOverSocketColumns(localX, localY) {
+        if (inputSocketColumn.visible) {
+            var inputPoint = root.mapToItem(inputSocketColumn, localX, localY)
+
+            if (inputSocketColumn.contains(inputPoint)) {
+                return true
+            }
         }
 
-        root.displayName = displayNameInput.text.trim()
-        root.editingDisplayName = false
-        displayNameInput.focus = false
-        displayNameEdited(root.displayName)
+        if (outputSocketColumn.visible) {
+            var outputPoint = root.mapToItem(outputSocketColumn, localX, localY)
+
+            if (outputSocketColumn.contains(outputPoint)) {
+                return true
+            }
+        }
+
+        return false
+    }
+
+    function pickPressTarget(localX, localY) {
+        var hit = deepestChildAt(root, localX, localY)
+
+        if (hit !== dragArea) {
+            return hit
+        }
+
+        for (var i = 0; i < root.children.length; i += 1) {
+            var child = root.children[i]
+
+            if (child === dragArea || !child.visible) {
+                continue
+            }
+
+            var mapped = root.mapToItem(child, localX, localY)
+
+            if (!child.contains(mapped)) {
+                continue
+            }
+
+            return deepestChildAt(child, mapped.x, mapped.y)
+        }
+
+        return hit
+    }
+
+    function shouldPassPressToChild(hit) {
+        var item = hit
+
+        while (item && item !== root) {
+            if (isNodeTextInput(item)) {
+                return true
+            }
+
+            if (isSocketItem(item)) {
+                return true
+            }
+
+            if (item.objectName === "socketConnectorDrag") {
+                return true
+            }
+
+            if (item !== dragArea && typeof item.propagateComposedEvents === "boolean") {
+                return true
+            }
+
+            item = item.parent
+        }
+
+        return false
+    }
+
+    function markPassiveBodyLabels(item) {
+        for (var i = 0; i < item.children.length; i += 1) {
+            var child = item.children[i]
+
+            if (!child) {
+                continue
+            }
+
+            if (isNodeTextInput(child)) {
+                continue
+            }
+
+            if (typeof child.propagateComposedEvents === "boolean") {
+                markPassiveBodyLabels(child)
+                continue
+            }
+
+            if (child.font !== undefined && child.selectByMouse === undefined) {
+                child.enabled = false
+            }
+
+            markPassiveBodyLabels(child)
+        }
     }
 
     function clearTextFocus(item) {
-        if (root.editingDisplayName) {
-            root.finishDisplayNameEdit()
-        }
-
         if (item === undefined) {
             item = root
         }
 
         for (var i = 0; i < item.children.length; i += 1) {
             var child = item.children[i]
-
-            if (child && child.editingLabel) {
-                child.finishLabelEdit()
-            }
 
             if (isNodeTextInput(child) && child.activeFocus) {
                 child.focus = false
@@ -120,6 +200,24 @@ Rectangle {
         return mapToItem(null, width / 2, height / 2)
     }
 
+    function socketCanvasPosition(socketSide, socketId) {
+        var socketColumn = socketSide === "left" ? inputSocketColumn : outputSocketColumn
+
+        if (!graphCanvas) {
+            return socketScenePosition(socketSide, socketId)
+        }
+
+        for (var i = 0; i < socketColumn.children.length; i += 1) {
+            var socketItem = socketColumn.children[i]
+
+            if (socketItem.socketId === socketId && socketItem.connectorCanvasPosition) {
+                return socketItem.connectorCanvasPosition()
+            }
+        }
+
+        return graphCanvas.mapFromItem(root, width / 2, height / 2)
+    }
+
     width: 330
     height: 170
     radius: 6
@@ -127,6 +225,8 @@ Rectangle {
     border.color: isSelected ? colors.accent : colors.panelBorder
     border.width: isSelected ? 2 : 1
     clip: false
+
+    Component.onCompleted: markPassiveBodyLabels(bodyColumn)
 
     HoverHandler {
         id: nodeHover
@@ -136,64 +236,63 @@ Rectangle {
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 20
-        spacing: 12
+        anchors.margins: outerMargin
+        spacing: 8
 
         ColumnLayout {
             id: headerArea
 
             Layout.fillWidth: true
-            spacing: 1
+            spacing: 0
 
             Label {
+                Layout.preferredHeight: root.category.length > 0 ? 14 : 0
+                Layout.maximumHeight: root.category.length > 0 ? 14 : 0
                 text: root.category
                 color: colors.textMuted
                 font.pixelSize: 11
                 visible: root.category.length > 0
-            }
-
-            Label {
-                text: root.defaultTitle
-                color: colors.textMain
-                font.pixelSize: 28
+                enabled: false
             }
 
             Item {
+                id: titleRow
+
                 Layout.fillWidth: true
-                Layout.preferredHeight: root.editingDisplayName ? displayNameInput.implicitHeight : displayNameLabel.implicitHeight
+                Layout.preferredHeight: 32
+
+                Label {
+                    id: typeTitleLabel
+
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: root.defaultTitle
+                    color: colors.textMain
+                    font.pixelSize: 28
+                    enabled: false
+                }
+
+            }
+
+            Item {
+                id: displayNameRow
+
+                Layout.fillWidth: true
+                Layout.preferredHeight: root.showDisplayNameRow ? 14 : 0
+                Layout.maximumHeight: root.showDisplayNameRow ? 14 : 0
+                visible: root.showDisplayNameRow
 
                 Label {
                     id: displayNameLabel
 
-                    visible: !root.editingDisplayName
-                    text: root.displayName.length > 0 ? root.displayName : "name"
-                    color: root.displayName.length > 0 ? colors.textMain : colors.textMuted
-                    font.pixelSize: 13
-                }
-
-                TextInput {
-                    id: displayNameInput
-
-                    visible: root.editingDisplayName
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: parent.width
                     text: root.displayName
-                    color: colors.textMain
-                    font.pixelSize: 13
-                    selectByMouse: true
-                    maximumLength: 64
-
-                    onEditingFinished: root.finishDisplayNameEdit()
-
-                    Keys.onEscapePressed: {
-                        displayNameInput.text = root.displayName
-                        root.editingDisplayName = false
-                        focus = false
-                    }
-                }
-
-                TapHandler {
-                    enabled: !root.editingDisplayName
-
-                    onDoubleTapped: root.beginDisplayNameEdit()
+                    color: colors.textMuted
+                    font.pixelSize: 11
+                    elide: Text.ElideRight
+                    enabled: false
                 }
             }
         }
@@ -208,6 +307,7 @@ Rectangle {
 
                 visible: root.inputSockets.length > 0
                 Layout.preferredWidth: visible ? 96 : 0
+                Layout.leftMargin: -outerMargin
                 Layout.fillHeight: true
                 spacing: 4
 
@@ -219,16 +319,16 @@ Rectangle {
                         side: "left"
                         nodeRoot: root
 
-                        onConnectionDragStarted: function(socketId, socketSide, sceneX, sceneY) {
-                            root.connectionDragStarted(socketId, socketSide, sceneX, sceneY)
+                        onConnectionDragStarted: function(socketId, socketSide, canvasX, canvasY) {
+                            root.connectionDragStarted(socketId, socketSide, canvasX, canvasY)
                         }
 
-                        onConnectionDragged: function(sceneX, sceneY) {
-                            root.connectionDragged(sceneX, sceneY)
+                        onConnectionDragged: function(canvasX, canvasY) {
+                            root.connectionDragged(canvasX, canvasY)
                         }
 
-                        onConnectionDragFinished: function(sceneX, sceneY) {
-                            root.connectionDragFinished(sceneX, sceneY)
+                        onConnectionDragFinished: function(canvasX, canvasY) {
+                            root.connectionDragFinished(canvasX, canvasY)
                         }
                     }
                 }
@@ -245,6 +345,8 @@ Rectangle {
 
                     width: parent.width
                     spacing: 4
+
+                    onChildrenChanged: root.markPassiveBodyLabels(bodyColumn)
                 }
             }
 
@@ -253,6 +355,7 @@ Rectangle {
 
                 visible: root.outputSockets.length > 0
                 Layout.preferredWidth: visible ? 96 : 0
+                Layout.rightMargin: -outerMargin
                 Layout.fillHeight: true
                 spacing: 4
 
@@ -263,25 +366,18 @@ Rectangle {
                         socketId: modelData
                         displayLabel: root.outputLabelForSocket(modelData)
                         side: "right"
-                        labelEditable: true
                         nodeRoot: root
 
-                        onEditingLabelChanged: root.editingSocketLabel = editingLabel
-
-                        onDisplayLabelEdited: function(socketId, newDisplayLabel) {
-                            root.setOutputLabel(socketId, newDisplayLabel)
+                        onConnectionDragStarted: function(socketId, socketSide, canvasX, canvasY) {
+                            root.connectionDragStarted(socketId, socketSide, canvasX, canvasY)
                         }
 
-                        onConnectionDragStarted: function(socketId, socketSide, sceneX, sceneY) {
-                            root.connectionDragStarted(socketId, socketSide, sceneX, sceneY)
+                        onConnectionDragged: function(canvasX, canvasY) {
+                            root.connectionDragged(canvasX, canvasY)
                         }
 
-                        onConnectionDragged: function(sceneX, sceneY) {
-                            root.connectionDragged(sceneX, sceneY)
-                        }
-
-                        onConnectionDragFinished: function(sceneX, sceneY) {
-                            root.connectionDragFinished(sceneX, sceneY)
+                        onConnectionDragFinished: function(canvasX, canvasY) {
+                            root.connectionDragFinished(canvasX, canvasY)
                         }
                     }
                 }
@@ -297,10 +393,18 @@ Rectangle {
 
         anchors.fill: parent
         acceptedButtons: Qt.LeftButton
+        hoverEnabled: true
         cursorShape: pressed ? Qt.ClosedHandCursor : Qt.OpenHandCursor
-        z: -1
+        z: 10
 
         onPressed: function(mouse) {
+            var hit = root.pickPressTarget(mouse.x, mouse.y)
+
+            if (root.shouldPassPressToChild(hit) || root.isOverSocketColumns(mouse.x, mouse.y)) {
+                mouse.accepted = false
+                return
+            }
+
             root.clearTextFocus()
             var point = mapToItem(null, mouse.x, mouse.y)
             lastSceneX = point.x
@@ -318,5 +422,6 @@ Rectangle {
             lastSceneX = point.x
             lastSceneY = point.y
         }
+
     }
 }

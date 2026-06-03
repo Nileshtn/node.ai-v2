@@ -38,6 +38,20 @@ Item {
         gridCanvas.requestPaint()
     }
 
+    function shouldPanViewport(mouse) {
+        if ((mouse.buttons & Qt.MiddleButton) !== 0) {
+            return true
+        }
+
+        return (mouse.buttons & Qt.LeftButton) !== 0
+                && (mouse.modifiers & Qt.ControlModifier) !== 0
+    }
+
+    function showsPanCursor(mouse) {
+        return mouse.button === Qt.MiddleButton
+                || (mouse.button === Qt.LeftButton && (mouse.modifiers & Qt.ControlModifier) !== 0)
+    }
+
     function visibleCenterWorldPosition() {
         return {
             "x": (width / 2 - offsetX) / zoom,
@@ -300,7 +314,7 @@ Item {
             lastX = mouse.x
             lastY = mouse.y
 
-            if (mouse.button !== Qt.RightButton) {
+            if (root.showsPanCursor(mouse)) {
                 cursorShape = Qt.ClosedHandCursor
             }
 
@@ -328,6 +342,10 @@ Item {
 
             if ((mouse.buttons & Qt.RightButton) !== 0) {
                 root.canvasPanned(deltaX, deltaY, mouse)
+                return
+            }
+
+            if (!root.shouldPanViewport(mouse)) {
                 return
             }
 

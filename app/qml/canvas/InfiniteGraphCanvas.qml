@@ -385,8 +385,7 @@ GraphCanvas {
             return null
         }
 
-        var scenePoint = nodeDelegate.nodeItem.socketScenePosition(socketSide, socketLabel)
-        return scenePointToCanvas(scenePoint.x, scenePoint.y)
+        return nodeDelegate.nodeItem.socketCanvasPosition(socketSide, socketLabel)
     }
 
     function resetLookupValue(nodeIndex) {
@@ -443,8 +442,11 @@ GraphCanvas {
         return null
     }
 
-    function startConnection(nodeIndex, socketLabel, socketSide, sceneX, sceneY) {
-        var canvasPoint = scenePointToCanvas(sceneX, sceneY)
+    function startConnection(nodeIndex, socketLabel, socketSide, canvasX, canvasY) {
+        var canvasPoint = {
+            "x": canvasX,
+            "y": canvasY
+        }
 
         if (socketSide === "left") {
             var sourcePoint = detachFromInput(nodeIndex, socketLabel)
@@ -457,6 +459,12 @@ GraphCanvas {
         } else {
             connectionSourceNodeIndex = nodeIndex
             connectionSourceSocket = socketLabel
+
+            var outputPoint = socketCanvasPosition(nodeIndex, "right", socketLabel)
+
+            if (outputPoint) {
+                canvasPoint = outputPoint
+            }
         }
 
         isConnecting = true
@@ -468,23 +476,25 @@ GraphCanvas {
         requestConnectionPaint()
     }
 
-    function dragConnection(sceneX, sceneY) {
+    function dragConnection(canvasX, canvasY) {
         if (!isConnecting) {
             return
         }
 
-        var canvasPoint = scenePointToCanvas(sceneX, sceneY)
-        connectionEndX = canvasPoint.x
-        connectionEndY = canvasPoint.y
+        connectionEndX = canvasX
+        connectionEndY = canvasY
         requestConnectionPaint()
     }
 
-    function finishConnection(sceneX, sceneY) {
+    function finishConnection(canvasX, canvasY) {
         if (!isConnecting) {
             return
         }
 
-        var releasePoint = scenePointToCanvas(sceneX, sceneY)
+        var releasePoint = {
+            "x": canvasX,
+            "y": canvasY
+        }
         var closestNodeIndex = -1
         var closestSocket = ""
         var closestDistance = 32
@@ -945,10 +955,25 @@ GraphCanvas {
                 sourceComponent: root.componentForNodeType(model.type)
 
                 onLoaded: {
-                    if (item && item.value !== undefined && model.value !== undefined) {
+                    if (!item) {
+                        return
+                    }
+
+                    if (item.value !== undefined && model.value !== undefined) {
                         item.value = model.value
                     }
+
+                    item.graphCanvas = root
+                    item.displayName = model.displayName || ""
+                    item.outputLabels = root.cloneLabelMap(model.outputLabels)
                 }
+            }
+
+            Binding {
+                target: nodeLoader.item
+                property: "graphCanvas"
+                value: root
+                when: nodeLoader.item !== null
             }
 
             Binding {
@@ -962,14 +987,14 @@ GraphCanvas {
                 target: nodeLoader.item
                 property: "displayName"
                 value: model.displayName || ""
-                when: nodeLoader.item !== null && !nodeLoader.item.renaming
+                when: nodeLoader.item !== null
             }
 
             Binding {
                 target: nodeLoader.item
                 property: "outputLabels"
                 value: root.cloneLabelMap(model.outputLabels)
-                when: nodeLoader.item !== null && !nodeLoader.item.renaming
+                when: nodeLoader.item !== null
             }
 
             Connections {
@@ -986,12 +1011,24 @@ GraphCanvas {
 
                 function onDisplayNameEdited(newDisplayName) {
                     graphNodes.setProperty(index, "displayName", newDisplayName)
+
+                    if (nodeLoader.item) {
+                        nodeLoader.item.displayName = newDisplayName
+                    }
+
                     root.lookupDisplayChanged()
                     root.updateConnectedLookupValues(index)
                 }
 
                 function onOutputLabelsEdited(labels) {
-                    graphNodes.setProperty(index, "outputLabels", root.cloneLabelMap(labels))
+                    var savedLabels = root.cloneLabelMap(labels)
+
+                    graphNodes.setProperty(index, "outputLabels", savedLabels)
+
+                    if (nodeLoader.item) {
+                        nodeLoader.item.outputLabels = savedLabels
+                    }
+
                     root.lookupDisplayChanged()
                     root.updateConnectedLookupValues(index)
                 }
@@ -1007,16 +1044,16 @@ GraphCanvas {
                     root.requestConnectionPaint()
                 }
 
-                function onConnectionDragStarted(socketLabel, socketSide, sceneX, sceneY) {
-                    root.startConnection(index, socketLabel, socketSide, sceneX, sceneY)
+                function onConnectionDragStarted(socketLabel, socketSide, canvasX, canvasY) {
+                    root.startConnection(index, socketLabel, socketSide, canvasX, canvasY)
                 }
 
-                function onConnectionDragged(sceneX, sceneY) {
-                    root.dragConnection(sceneX, sceneY)
+                function onConnectionDragged(canvasX, canvasY) {
+                    root.dragConnection(canvasX, canvasY)
                 }
 
-                function onConnectionDragFinished(sceneX, sceneY) {
-                    root.finishConnection(sceneX, sceneY)
+                function onConnectionDragFinished(canvasX, canvasY) {
+                    root.finishConnection(canvasX, canvasY)
                 }
 
                 function onValueChanged() {

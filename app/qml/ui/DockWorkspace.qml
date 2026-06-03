@@ -29,7 +29,7 @@ Item {
     }
 
     function refreshLookupEntries(entries) {
-        viewportSidebar.lookupEntries = entries
+        viewportSidebar.lookupEntries = entries || []
     }
 
     function relayoutCanvas() {
