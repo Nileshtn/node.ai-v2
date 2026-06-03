@@ -134,8 +134,8 @@ GraphCanvas {
             return "sub"
         } else if (nodeType === "Mul") {
             return "mul"
-        } else if (nodeType === "Button") {
-            return "button"
+        } else if (nodeType === "Div") {
+            return "div"
         } else if (nodeType === "Random") {
             return "random"
         } else if (nodeType === "Random Like") {
@@ -244,7 +244,7 @@ GraphCanvas {
             return { "kind": "float" }
         } else if (nodeType === "Str") {
             return { "kind": "text" }
-        } else if (nodeType === "Bool" || nodeType === "Button") {
+        } else if (nodeType === "Bool") {
             return { "kind": "bool" }
         } else if (nodeType === "Vector 2D") {
             return { "kind": "vector", "size": 2 }
@@ -1311,8 +1311,8 @@ GraphCanvas {
             return subNodeComponent
         } else if (nodeType === "Mul") {
             return mulNodeComponent
-        } else if (nodeType === "Button") {
-            return buttonNodeComponent
+        } else if (nodeType === "Div") {
+            return divNodeComponent
         } else if (nodeType === "Random") {
             return randomNodeComponent
         } else if (nodeType === "Random Like") {
@@ -1369,9 +1369,9 @@ GraphCanvas {
     }
 
     Component {
-        id: buttonNodeComponent
+        id: divNodeComponent
 
-        ButtonNode {}
+        DivNode {}
     }
 
     Component {

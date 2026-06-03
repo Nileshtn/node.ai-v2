@@ -289,7 +289,7 @@ Rectangle {
             { "text": "Add" },
             { "text": "Sub" },
             { "text": "Mul" },
-            { "text": "Button" }
+            { "text": "Div" }
         ]
     }
 

@@ -255,7 +255,7 @@ ApplicationWindow {
 
                     return
 
-                } else if (action === "Add" || action === "Sub" || action === "Mul" || action === "Button") {
+                } else if (action === "Add" || action === "Sub" || action === "Mul" || action === "Div") {
 
                     canvas.createMathNode(action)
 

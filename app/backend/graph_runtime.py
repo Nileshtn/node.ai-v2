@@ -28,7 +28,7 @@ class GraphRuntime(QObject):
         "Str",
         "Button",
     }
-    
+
     GENERATOR_NODE_TYPES = {
         "Random",
         "Random Like",
@@ -102,6 +102,12 @@ class GraphRuntime(QObject):
                     resolve_input(node_index, "a", next_stack),
                     resolve_input(node_index, "b", next_stack),
                     "mul",
+                )
+            elif node_type == "Div":
+                value = self._apply_binary_operation(
+                    resolve_input(node_index, "a", next_stack),
+                    resolve_input(node_index, "b", next_stack),
+                    "div",
                 )
             else:
                 raise ValueError(f"{node_type or 'Unknown'} nodes do not produce values yet.")
@@ -310,6 +316,12 @@ class GraphRuntime(QObject):
 
         if operation == "mul":
             return left * right
+
+        if operation == "div":
+            if right == 0:
+                raise ValueError("Cannot divide by zero.")
+
+            return left / right
 
         raise ValueError(f"Unsupported operation: {operation}")
 
