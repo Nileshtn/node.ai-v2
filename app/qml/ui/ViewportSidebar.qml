@@ -13,15 +13,18 @@ Item {
     property int splitterWidth: 4
     property int tabStripWidth: 28
     property var lookupEntries: []
+    property var nodeProperties: null
+    property var graphCanvas: null
     property string activeTab: "lookup"
 
     readonly property AppColors colors: AppColors {}
     readonly property real collapsedWidth: tabStripWidth
     readonly property real expandedWidth: panelWidth + tabStripWidth + splitterWidth
     readonly property real totalWidth: open ? expandedWidth : collapsedWidth
-    readonly property var tabs: ["lookup"]
+    readonly property var tabs: ["lookup", "properties"]
 
     signal toggled(bool open)
+    signal requestPropertiesRefresh()
 
     function toggle() {
         open = !open
@@ -37,6 +40,12 @@ Item {
 
     function tabLabel(tabId) {
         return tabId.charAt(0).toUpperCase() + tabId.slice(1)
+    }
+
+    onActiveTabChanged: {
+        if (activeTab === "properties") {
+            requestPropertiesRefresh()
+        }
     }
 
     function clampPanelWidth(nextWidth) {
@@ -143,7 +152,7 @@ Item {
 
                     Rectangle {
                         width: tabRail.width - 4
-                        height: 64
+                        height: modelData === "properties" ? 88 : 64
                         x: 2
                         radius: root.open && root.activeTab === modelData ? 0 : 3
                         color: {
@@ -180,6 +189,10 @@ Item {
 
                                 root.activeTab = modelData
                                 root.expand()
+
+                                if (modelData === "properties") {
+                                    root.requestPropertiesRefresh()
+                                }
                             }
                         }
                     }
@@ -199,7 +212,15 @@ Item {
 
             LookupCanvas {
                 anchors.fill: parent
+                visible: root.activeTab === "lookup"
                 entries: root.lookupEntries
+            }
+
+            PropertiesCanvas {
+                anchors.fill: parent
+                visible: root.activeTab === "properties"
+                graphCanvas: root.graphCanvas
+                nodeProperties: root.nodeProperties
             }
         }
     }

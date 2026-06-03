@@ -9,6 +9,8 @@ Item {
     property alias sidebarOpen: viewportSidebar.open
     property alias sidebarWidth: viewportSidebar.panelWidth
     property var lookupEntries: viewportSidebar.lookupEntries
+    property var nodeProperties: viewportSidebar.nodeProperties
+    property alias graphCanvas: viewportSidebar.graphCanvas
     readonly property real sidebarInset: viewportSidebar.totalWidth
 
     readonly property AppColors colors: AppColors {}
@@ -30,6 +32,31 @@ Item {
 
     function refreshLookupEntries(entries) {
         viewportSidebar.lookupEntries = entries || []
+    }
+
+    function refreshProperties(properties) {
+        viewportSidebar.nodeProperties = properties || null
+    }
+
+    function pullPropertiesFromCanvas() {
+        if (!graphCanvas || !graphCanvas.selectedNodeProperties) {
+            refreshProperties(null)
+            return
+        }
+
+        refreshProperties(graphCanvas.selectedNodeProperties())
+    }
+
+    function attachGraphCanvas() {
+        for (var i = 0; i < centerHost.children.length; i += 1) {
+            var child = centerHost.children[i]
+
+            if (child && child.selectedNodeProperties !== undefined) {
+                graphCanvas = child
+                viewportSidebar.graphCanvas = child
+                return
+            }
+        }
     }
 
     function relayoutCanvas() {
@@ -65,8 +92,14 @@ Item {
             onToggled: function(isOpen) {
                 root.relayoutCanvas()
             }
+            onRequestPropertiesRefresh: root.pullPropertiesFromCanvas()
         }
     }
 
-    Component.onCompleted: relayoutCanvas()
+    Component.onCompleted: {
+        attachGraphCanvas()
+        relayoutCanvas()
+    }
+
+    onChildrenChanged: Qt.callLater(attachGraphCanvas)
 }

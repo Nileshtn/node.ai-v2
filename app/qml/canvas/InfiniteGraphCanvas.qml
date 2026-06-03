@@ -9,6 +9,7 @@ GraphCanvas {
 
     signal graphComputed(string message, string level)
     signal lookupDisplayChanged()
+    signal propertiesDisplayChanged()
     property int selectedNodeIndex: -1
     property var selectedNodeIndices: []
     property int hoveredNodeIndex: -1
@@ -60,6 +61,7 @@ GraphCanvas {
             selectedNodeIndices = [nodeIndex]
             selectedNodeIndex = nodeIndex
             lookupDisplayChanged()
+            propertiesDisplayChanged()
             return
         }
 
@@ -75,12 +77,14 @@ GraphCanvas {
         selectedNodeIndices = nextSelection
         selectedNodeIndex = nextSelection.length > 0 ? nextSelection[nextSelection.length - 1] : -1
         lookupDisplayChanged()
+        propertiesDisplayChanged()
     }
 
     function clearSelection() {
         selectedNodeIndices = []
         selectedNodeIndex = -1
         lookupDisplayChanged()
+        propertiesDisplayChanged()
     }
 
     function selectedLookupEntries() {
@@ -211,6 +215,206 @@ GraphCanvas {
         return socketId
     }
 
+    function clonePanelValue(value) {
+        if (value === null || value === undefined) {
+            return value
+        }
+
+        if (Array.isArray(value)) {
+            return value.slice()
+        }
+
+        if (typeof value === "object") {
+            var copy = {}
+
+            for (var key in value) {
+                copy[key] = value[key]
+            }
+
+            return copy
+        }
+
+        return value
+    }
+
+    function valueEditorSpec(nodeType) {
+        if (nodeType === "Int") {
+            return { "kind": "int" }
+        } else if (nodeType === "Float") {
+            return { "kind": "float" }
+        } else if (nodeType === "Str") {
+            return { "kind": "text" }
+        } else if (nodeType === "Bool" || nodeType === "Button") {
+            return { "kind": "bool" }
+        } else if (nodeType === "Vector 2D") {
+            return { "kind": "vector", "size": 2 }
+        } else if (nodeType === "Vector 3D") {
+            return { "kind": "vector", "size": 3 }
+        } else if (nodeType === "Vector 4D") {
+            return { "kind": "vector", "size": 4 }
+        } else if (nodeType === "Random" || nodeType === "Ones" || nodeType === "Zeros") {
+            return { "kind": "shape" }
+        } else if (nodeType === "Random Int") {
+            return { "kind": "randomInt" }
+        } else if (nodeType === "Range") {
+            return { "kind": "range" }
+        }
+
+        return { "kind": "none" }
+    }
+
+    function outputSocketIdsForNode(nodeIndex, nodeType) {
+        var item = nodeItemAt(nodeIndex)
+
+        if (item && item.outputSockets && item.outputSockets.length > 0) {
+            return item.outputSockets
+        }
+
+        if (nodeType === "Lookup") {
+            return []
+        }
+
+        return ["Name"]
+    }
+
+    function selectedNodeProperties() {
+        if (selectedNodeIndices.length === 0) {
+            return null
+        }
+
+        if (selectedNodeIndices.length > 1) {
+            return {
+                "multi": true,
+                "count": selectedNodeIndices.length
+            }
+        }
+
+        var nodeIndex = selectedNodeIndex
+
+        if (nodeIndex < 0 || nodeIndex >= graphNodes.count) {
+            return null
+        }
+
+        var node = graphNodes.get(nodeIndex)
+        var item = nodeItemAt(nodeIndex)
+        var socketIds = outputSocketIdsForNode(nodeIndex, node.type)
+        var outputs = []
+
+        for (var i = 0; i < socketIds.length; i += 1) {
+            var socketId = socketIds[i]
+
+            outputs.push({
+                "socketId": socketId,
+                "label": outputSocketLabelForModel(node, socketId)
+            })
+        }
+
+        var nodeValue = node.value
+
+        if (item && item.value !== undefined) {
+            nodeValue = item.value
+        }
+
+        return {
+            "multi": false,
+            "nodeIndex": nodeIndex,
+            "type": node.type,
+            "typeTitle": defaultNodeTitle(node.type),
+            "displayName": node.displayName || "",
+            "outputs": outputs,
+            "valueEditor": valueEditorSpec(node.type),
+            "value": clonePanelValue(nodeValue)
+        }
+    }
+
+    function updateSelectedNodeDisplayName(name) {
+        if (selectedNodeIndex < 0 || selectedNodeIndex >= graphNodes.count) {
+            return
+        }
+
+        var trimmed = name === undefined ? "" : String(name).trim()
+
+        graphNodes.setProperty(selectedNodeIndex, "displayName", trimmed)
+
+        var item = nodeItemAt(selectedNodeIndex)
+
+        if (item) {
+            item.displayName = trimmed
+        }
+
+        lookupDisplayChanged()
+        propertiesDisplayChanged()
+    }
+
+    function updateSelectedNodeOutputLabel(socketId, label) {
+        if (selectedNodeIndex < 0 || selectedNodeIndex >= graphNodes.count) {
+            return
+        }
+
+        var node = graphNodes.get(selectedNodeIndex)
+        var labels = cloneLabelMap(node.outputLabels)
+        var trimmed = label === undefined ? "" : String(label).trim()
+
+        if (trimmed.length > 0 && trimmed !== socketId) {
+            labels[socketId] = trimmed
+        } else {
+            delete labels[socketId]
+        }
+
+        var savedLabels = cloneLabelMap(labels)
+
+        graphNodes.setProperty(selectedNodeIndex, "outputLabels", savedLabels)
+
+        var item = nodeItemAt(selectedNodeIndex)
+
+        if (item) {
+            item.outputLabels = savedLabels
+        }
+
+        lookupDisplayChanged()
+        propertiesDisplayChanged()
+    }
+
+    function updateSelectedNodeValue(value) {
+        if (selectedNodeIndex < 0 || selectedNodeIndex >= graphNodes.count) {
+            return
+        }
+
+        var savedValue = clonePanelValue(value)
+
+        graphNodes.setProperty(selectedNodeIndex, "value", savedValue)
+
+        applyNodeValue(nodeItemAt(selectedNodeIndex), savedValue)
+        updateConnectedLookupValues(selectedNodeIndex)
+    }
+
+    function updateSelectedNodeVectorComponent(componentIndex, nextValue) {
+        if (selectedNodeIndex < 0 || selectedNodeIndex >= graphNodes.count) {
+            return
+        }
+
+        var node = graphNodes.get(selectedNodeIndex)
+        var item = nodeItemAt(selectedNodeIndex)
+        var current = node.value
+
+        if (item && item.value !== undefined) {
+            current = item.value
+        }
+
+        var next = clonePanelValue(current)
+
+        if (!Array.isArray(next)) {
+            next = []
+        }
+
+        while (next.length <= componentIndex) {
+            next.push(0)
+        }
+
+        next[componentIndex] = isNaN(nextValue) ? 0 : nextValue
+        updateSelectedNodeValue(next)
+    }
+
     function createMathNode(nodeType) {
         var center = visibleCenterWorldPosition()
 
@@ -290,17 +494,46 @@ GraphCanvas {
     }
 
     function nodeItemAt(nodeIndex) {
-        for (var i = 0; i < nodeRepeater.count; i += 1) {
-            if (i !== nodeIndex) {
-                continue
-            }
+        var delegate = nodeRepeater.itemAt(nodeIndex)
 
-            var delegate = nodeRepeater.itemAt(i)
+        return delegate ? delegate.nodeItem : null
+    }
 
-            return delegate ? delegate.nodeItem : null
+    function applyNodeValue(item, value) {
+        if (!item) {
+            return
         }
 
-        return null
+        if (typeof item.setValue === "function") {
+            if (typeof value === "number") {
+                item.setValue(value)
+            } else if (typeof value === "string" && item.value !== undefined && typeof item.value === "string") {
+                item.value = value
+            } else if (typeof value === "string") {
+                item.setValue(parseFloat(value || "0"))
+            } else {
+                item.setValue(value)
+            }
+            return
+        }
+
+        if (item.value !== undefined) {
+            item.value = clonePanelValue(value)
+        }
+    }
+
+    function syncNodeValueToModel(nodeIndex) {
+        if (nodeIndex < 0 || nodeIndex >= graphNodes.count) {
+            return
+        }
+
+        var item = nodeItemAt(nodeIndex)
+
+        if (!item || item.value === undefined) {
+            return
+        }
+
+        graphNodes.setProperty(nodeIndex, "value", clonePanelValue(item.value))
     }
 
     function clearTextFocusOnSelectedNodes() {
@@ -997,6 +1230,13 @@ GraphCanvas {
                 when: nodeLoader.item !== null
             }
 
+            Binding {
+                target: nodeLoader.item
+                property: "value"
+                value: root.clonePanelValue(model.value)
+                when: nodeLoader.item !== null && nodeLoader.item.value !== undefined
+            }
+
             Connections {
                 target: nodeLoader.item
                 ignoreUnknownSignals: true
@@ -1057,6 +1297,7 @@ GraphCanvas {
                 }
 
                 function onValueChanged() {
+                    root.syncNodeValueToModel(index)
                     root.updateConnectedLookupValues(index)
                 }
             }

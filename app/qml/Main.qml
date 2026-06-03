@@ -331,6 +331,12 @@ ApplicationWindow {
                     }
                 }
 
+                onPropertiesDisplayChanged: {
+                    if (dockWorkspace.sidebarOpen) {
+                        dockWorkspace.refreshProperties(canvas.selectedNodeProperties())
+                    }
+                }
+
             }
 
         }
