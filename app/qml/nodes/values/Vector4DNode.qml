@@ -13,7 +13,7 @@ Node {
 
     width: 500
     height: 190
-    title: "vector 4d"
+    defaultTitle: "vector 4d"
     category: ""
     inputSockets: []
     outputSockets: ["Name"]
@@ -40,9 +40,10 @@ Node {
                 border.width: 1
                 radius: 3
 
-                TextInput {
+                NodeTextInput {
                     id: componentInput
 
+                    nodeTarget: root
                     anchors.fill: parent
                     anchors.leftMargin: 8
                     anchors.rightMargin: 8

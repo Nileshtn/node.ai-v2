@@ -7,7 +7,7 @@ import "../../theme"
 Node {
     width: 360
     height: 190
-    title: "sub"
+    defaultTitle: "sub"
     category: ""
     inputSockets: ["a", "b"]
     outputSockets: ["Name"]

@@ -12,7 +12,7 @@ Node {
     readonly property int stepperWidth: 26
     width: 430
     height: 190
-    title: "int"
+    defaultTitle: "int"
     category: ""
     inputSockets: []
     outputSockets: ["Name"]
@@ -61,9 +61,10 @@ Node {
             border.color: valueInput.activeFocus ? colors.nodeSocket : colors.nodeControlBorder
             border.width: 1
 
-            TextInput {
+            NodeTextInput {
                 id: valueInput
 
+                nodeTarget: root
                 anchors.fill: parent
                 anchors.leftMargin: 8
                 anchors.rightMargin: 8

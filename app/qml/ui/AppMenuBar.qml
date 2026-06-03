@@ -347,6 +347,7 @@ Rectangle {
 
         owner: windowButton
         actions: [
+            { "text": "Toggle Sidebar", "shortcut": "N" },
             { "text": "Toolbar", "shortcut": "Ctrl+Alt+T" },
             { "text": "Component Bar", "shortcut": "Ctrl+Alt+C" },
             { "text": "Info Bar", "shortcut": "Ctrl+Alt+I" },

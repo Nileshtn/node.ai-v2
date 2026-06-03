@@ -10,25 +10,109 @@ Rectangle {
     signal deleteRequested()
     signal nodeHoverChanged(bool hovered)
     signal moved(real screenDeltaX, real screenDeltaY)
-    signal connectionDragStarted(string socketLabel, string socketSide, real sceneX, real sceneY)
+    signal connectionDragStarted(string socketId, string socketSide, real sceneX, real sceneY)
     signal connectionDragged(real sceneX, real sceneY)
     signal connectionDragFinished(real sceneX, real sceneY)
+    signal displayNameEdited(string newDisplayName)
+    signal outputLabelsEdited(var labels)
 
     default property alias bodyContent: bodyColumn.data
-    property string title: "Node"
+    property string defaultTitle: "Node"
+    property string displayName: ""
+    property var outputLabels: ({})
+    property bool editingDisplayName: false
+    property bool editingSocketLabel: false
+    readonly property bool renaming: editingDisplayName || editingSocketLabel
     property string category: ""
     property var inputSockets: []
     property var outputSockets: []
     property bool isSelected: false
     readonly property AppColors colors: AppColors {}
 
-    function socketScenePosition(socketSide, socketLabel) {
+    function isNodeTextInput(item) {
+        return item && item.cursorPosition !== undefined && item.selectByMouse !== undefined
+    }
+
+    function outputLabelForSocket(socketId) {
+        if (outputLabels && outputLabels[socketId] !== undefined && outputLabels[socketId].length > 0) {
+            return outputLabels[socketId]
+        }
+
+        return socketId
+    }
+
+    function setOutputLabel(socketId, labelText) {
+        var nextLabels = {}
+
+        for (var key in outputLabels) {
+            nextLabels[key] = outputLabels[key]
+        }
+
+        if (labelText.length > 0) {
+            nextLabels[socketId] = labelText
+        } else {
+            delete nextLabels[socketId]
+        }
+
+        outputLabels = nextLabels
+        outputLabelsEdited(nextLabels)
+    }
+
+    function beginDisplayNameEdit() {
+        if (root.editingDisplayName) {
+            return
+        }
+
+        root.editingDisplayName = true
+        displayNameInput.text = root.displayName
+        Qt.callLater(function() {
+            displayNameInput.forceActiveFocus()
+            displayNameInput.selectAll()
+        })
+    }
+
+    function finishDisplayNameEdit() {
+        if (!root.editingDisplayName) {
+            return
+        }
+
+        root.displayName = displayNameInput.text.trim()
+        root.editingDisplayName = false
+        displayNameInput.focus = false
+        displayNameEdited(root.displayName)
+    }
+
+    function clearTextFocus(item) {
+        if (root.editingDisplayName) {
+            root.finishDisplayNameEdit()
+        }
+
+        if (item === undefined) {
+            item = root
+        }
+
+        for (var i = 0; i < item.children.length; i += 1) {
+            var child = item.children[i]
+
+            if (child && child.editingLabel) {
+                child.finishLabelEdit()
+            }
+
+            if (isNodeTextInput(child) && child.activeFocus) {
+                child.focus = false
+            }
+
+            clearTextFocus(child)
+        }
+    }
+
+    function socketScenePosition(socketSide, socketId) {
         var socketColumn = socketSide === "left" ? inputSocketColumn : outputSocketColumn
 
         for (var i = 0; i < socketColumn.children.length; i += 1) {
             var socketItem = socketColumn.children[i]
 
-            if (socketItem.label === socketLabel) {
+            if (socketItem.socketId === socketId) {
                 return socketItem.connectorScenePosition()
             }
         }
@@ -69,9 +153,48 @@ Rectangle {
             }
 
             Label {
-                text: root.title
+                text: root.defaultTitle
                 color: colors.textMain
                 font.pixelSize: 28
+            }
+
+            Item {
+                Layout.fillWidth: true
+                Layout.preferredHeight: root.editingDisplayName ? displayNameInput.implicitHeight : displayNameLabel.implicitHeight
+
+                Label {
+                    id: displayNameLabel
+
+                    visible: !root.editingDisplayName
+                    text: root.displayName.length > 0 ? root.displayName : "name"
+                    color: root.displayName.length > 0 ? colors.textMain : colors.textMuted
+                    font.pixelSize: 13
+                }
+
+                TextInput {
+                    id: displayNameInput
+
+                    visible: root.editingDisplayName
+                    text: root.displayName
+                    color: colors.textMain
+                    font.pixelSize: 13
+                    selectByMouse: true
+                    maximumLength: 64
+
+                    onEditingFinished: root.finishDisplayNameEdit()
+
+                    Keys.onEscapePressed: {
+                        displayNameInput.text = root.displayName
+                        root.editingDisplayName = false
+                        focus = false
+                    }
+                }
+
+                TapHandler {
+                    enabled: !root.editingDisplayName
+
+                    onDoubleTapped: root.beginDisplayNameEdit()
+                }
             }
         }
 
@@ -92,11 +215,12 @@ Rectangle {
                     model: root.inputSockets
 
                     NodeSocket {
-                        label: modelData
+                        socketId: modelData
                         side: "left"
+                        nodeRoot: root
 
-                        onConnectionDragStarted: function(socketLabel, socketSide, sceneX, sceneY) {
-                            root.connectionDragStarted(socketLabel, socketSide, sceneX, sceneY)
+                        onConnectionDragStarted: function(socketId, socketSide, sceneX, sceneY) {
+                            root.connectionDragStarted(socketId, socketSide, sceneX, sceneY)
                         }
 
                         onConnectionDragged: function(sceneX, sceneY) {
@@ -110,13 +234,11 @@ Rectangle {
                 }
             }
 
-            ScrollView {
+            Item {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 Layout.margins: 8
                 clip: true
-                ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
-                ScrollBar.vertical.policy: ScrollBar.AlwaysOff
 
                 ColumnLayout {
                     id: bodyColumn
@@ -138,11 +260,20 @@ Rectangle {
                     model: root.outputSockets
 
                     NodeSocket {
-                        label: modelData
+                        socketId: modelData
+                        displayLabel: root.outputLabelForSocket(modelData)
                         side: "right"
+                        labelEditable: true
+                        nodeRoot: root
 
-                        onConnectionDragStarted: function(socketLabel, socketSide, sceneX, sceneY) {
-                            root.connectionDragStarted(socketLabel, socketSide, sceneX, sceneY)
+                        onEditingLabelChanged: root.editingSocketLabel = editingLabel
+
+                        onDisplayLabelEdited: function(socketId, newDisplayLabel) {
+                            root.setOutputLabel(socketId, newDisplayLabel)
+                        }
+
+                        onConnectionDragStarted: function(socketId, socketSide, sceneX, sceneY) {
+                            root.connectionDragStarted(socketId, socketSide, sceneX, sceneY)
                         }
 
                         onConnectionDragged: function(sceneX, sceneY) {
@@ -164,16 +295,13 @@ Rectangle {
         property real lastSceneX: 0
         property real lastSceneY: 0
 
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.top: parent.top
-        anchors.topMargin: 20
-        height: headerArea.implicitHeight
+        anchors.fill: parent
         acceptedButtons: Qt.LeftButton
         cursorShape: pressed ? Qt.ClosedHandCursor : Qt.OpenHandCursor
-        z: 10
+        z: -1
 
         onPressed: function(mouse) {
+            root.clearTextFocus()
             var point = mapToItem(null, mouse.x, mouse.y)
             lastSceneX = point.x
             lastSceneY = point.y

@@ -5,13 +5,19 @@ import "../theme"
 Item {
     id: root
 
-    signal connectionDragStarted(string socketLabel, string socketSide, real sceneX, real sceneY)
+    signal connectionDragStarted(string socketId, string socketSide, real sceneX, real sceneY)
     signal connectionDragged(real sceneX, real sceneY)
     signal connectionDragFinished(real sceneX, real sceneY)
+    signal displayLabelEdited(string socketId, string newDisplayLabel)
 
-    property string label: ""
+    property string socketId: ""
+    property string displayLabel: ""
     property string side: "left"
+    property bool labelEditable: false
+    property bool editingLabel: false
+    property Item nodeRoot: null
     property real nodeEdgeInset: 20
+    readonly property string shownLabel: displayLabel.length > 0 ? displayLabel : socketId
     readonly property AppColors colors: AppColors {}
 
     width: 96
@@ -19,6 +25,32 @@ Item {
 
     function connectorScenePosition() {
         return socketDot.mapToItem(null, socketDot.width / 2, socketDot.height / 2)
+    }
+
+    function beginLabelEdit() {
+        if (!labelEditable || editingLabel) {
+            return
+        }
+
+        editingLabel = true
+        labelInput.text = displayLabel.length > 0 ? displayLabel : socketId
+        Qt.callLater(function() {
+            labelInput.forceActiveFocus()
+            labelInput.selectAll()
+        })
+    }
+
+    function finishLabelEdit() {
+        if (!editingLabel) {
+            return
+        }
+
+        var nextLabel = labelInput.text.trim()
+        var resolved = nextLabel.length > 0 && nextLabel !== socketId ? nextLabel : ""
+
+        editingLabel = false
+        labelInput.focus = false
+        displayLabelEdited(socketId, resolved)
     }
 
     Rectangle {
@@ -43,10 +75,11 @@ Item {
         height: root.height
         acceptedButtons: Qt.LeftButton
         hoverEnabled: true
+        z: editingLabel ? -1 : 0
 
         onPressed: function(mouse) {
             var point = root.connectorScenePosition()
-            root.connectionDragStarted(root.label, root.side, point.x, point.y)
+            root.connectionDragStarted(root.socketId, root.side, point.x, point.y)
             mouse.accepted = true
         }
 
@@ -66,14 +99,44 @@ Item {
     }
 
     Label {
+        id: socketLabel
+
+        visible: !root.editingLabel
         anchors.verticalCenter: parent.verticalCenter
         anchors.left: root.side === "left" ? socketDot.right : parent.left
         anchors.right: root.side === "right" ? socketDot.left : parent.right
         anchors.leftMargin: root.side === "left" ? 8 : 0
         anchors.rightMargin: root.side === "right" ? 8 : 0
-        text: root.label
+        text: root.shownLabel
         color: colors.textMain
         font.pixelSize: 14
         horizontalAlignment: root.side === "left" ? Text.AlignLeft : Text.AlignRight
+    }
+
+    TextInput {
+        id: labelInput
+
+        visible: root.editingLabel
+        anchors.verticalCenter: parent.verticalCenter
+        anchors.left: socketLabel.left
+        anchors.right: socketLabel.right
+        color: colors.textMain
+        font.pixelSize: 14
+        horizontalAlignment: socketLabel.horizontalAlignment
+        selectByMouse: true
+        maximumLength: 32
+
+        onEditingFinished: root.finishLabelEdit()
+
+        Keys.onEscapePressed: {
+            root.editingLabel = false
+            focus = false
+        }
+    }
+
+    TapHandler {
+        enabled: root.labelEditable && !root.editingLabel
+
+        onDoubleTapped: root.beginLabelEdit()
     }
 }

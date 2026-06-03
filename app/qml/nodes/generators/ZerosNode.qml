@@ -12,7 +12,7 @@ Node {
 
     width: 430
     height: 170
-    title: "zeros"
+    defaultTitle: "zeros"
     category: ""
     inputSockets: []
     outputSockets: ["Name"]
@@ -30,9 +30,10 @@ Node {
         border.width: 1
         radius: 3
 
-        TextInput {
+        NodeTextInput {
             id: shapeInput
 
+            nodeTarget: root
             anchors.fill: parent
             anchors.leftMargin: 8
             anchors.rightMargin: 8

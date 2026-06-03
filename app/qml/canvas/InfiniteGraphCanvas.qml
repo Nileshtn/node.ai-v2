@@ -4,24 +4,11 @@ import "../nodes/generators"
 import "../nodes/math"
 import "../nodes/utility"
 import "../nodes/values"
-import "../theme"
-
-Item {
+GraphCanvas {
     id: root
 
     signal graphComputed(string message, string level)
-
-    property real zoom: 1.0
-    property real minZoom: 0.2
-    property real maxZoom: 3.0
-    property real offsetX: width / 2
-    property real offsetY: height / 2
-    readonly property AppColors colors: AppColors {}
-    property color backgroundColor: colors.canvasBackground
-    property color minorGridColor: colors.gridMinor
-    property color majorGridColor: colors.gridMajor
-    property color axisGridColor: colors.gridAxis
-    property color textColor: colors.textMuted
+    signal lookupDisplayChanged()
     property int selectedNodeIndex: -1
     property var selectedNodeIndices: []
     property int hoveredNodeIndex: -1
@@ -36,24 +23,31 @@ Item {
     property bool isCuttingConnections: false
     property var connectionCutPoints: []
 
-    clip: true
-
-    function clamp(value, minValue, maxValue) {
-        return Math.max(minValue, Math.min(maxValue, value))
-    }
-
-    function requestGridPaint() {
-        gridCanvas.requestPaint()
-    }
-
     function requestConnectionPaint() {
         connectionCanvas.requestPaint()
     }
 
-    function visibleCenterWorldPosition() {
-        return {
-            "x": (width / 2 - offsetX) / zoom,
-            "y": (height / 2 - offsetY) / zoom
+    onViewportChanged: requestConnectionPaint()
+
+    onCanvasPressed: function(mouse) {
+        if (mouse.button === Qt.RightButton) {
+            startConnectionCut(mouse.x, mouse.y)
+            panArea.cursorShape = Qt.CrossCursor
+            return
+        }
+
+        clearSelection()
+    }
+
+    onCanvasReleased: function(mouse) {
+        if (mouse.button === Qt.RightButton) {
+            finishConnectionCut()
+        }
+    }
+
+    onCanvasPanned: function(deltaX, deltaY, mouse) {
+        if ((mouse.buttons & Qt.RightButton) !== 0) {
+            dragConnectionCut(mouse.x, mouse.y)
         }
     }
 
@@ -65,6 +59,7 @@ Item {
         if (!additiveSelection) {
             selectedNodeIndices = [nodeIndex]
             selectedNodeIndex = nodeIndex
+            lookupDisplayChanged()
             return
         }
 
@@ -79,11 +74,34 @@ Item {
 
         selectedNodeIndices = nextSelection
         selectedNodeIndex = nextSelection.length > 0 ? nextSelection[nextSelection.length - 1] : -1
+        lookupDisplayChanged()
     }
 
     function clearSelection() {
         selectedNodeIndices = []
         selectedNodeIndex = -1
+        lookupDisplayChanged()
+    }
+
+    function selectedLookupEntries() {
+        var entries = []
+
+        for (var selectionIndex = 0; selectionIndex < selectedNodeIndices.length; selectionIndex += 1) {
+            var nodeIndex = selectedNodeIndices[selectionIndex]
+            var node = graphNodes.get(nodeIndex)
+
+            if (!node || node.type !== "Lookup") {
+                continue
+            }
+
+            entries.push({
+                "nodeIndex": nodeIndex,
+                "label": nodeDisplayLabel(node),
+                "value": node.displayValue || "No value connected"
+            })
+        }
+
+        return entries
     }
 
     function setHoveredNode(nodeIndex, hovered) {
@@ -105,6 +123,94 @@ Item {
         graphComputed("New project ready", "INFO")
     }
 
+    function defaultNodeTitle(nodeType) {
+        if (nodeType === "Add") {
+            return "add"
+        } else if (nodeType === "Sub") {
+            return "sub"
+        } else if (nodeType === "Mul") {
+            return "mul"
+        } else if (nodeType === "Button") {
+            return "button"
+        } else if (nodeType === "Random") {
+            return "random"
+        } else if (nodeType === "Random Like") {
+            return "random like"
+        } else if (nodeType === "Ones") {
+            return "ones"
+        } else if (nodeType === "Ones Like") {
+            return "ones like"
+        } else if (nodeType === "Zeros") {
+            return "zeros"
+        } else if (nodeType === "Zeros Like") {
+            return "zeros like"
+        } else if (nodeType === "Random Int") {
+            return "random int"
+        } else if (nodeType === "Range") {
+            return "range"
+        } else if (nodeType === "Int") {
+            return "int"
+        } else if (nodeType === "Float") {
+            return "float"
+        } else if (nodeType === "Vector 2D") {
+            return "vector 2d"
+        } else if (nodeType === "Vector 3D") {
+            return "vector 3d"
+        } else if (nodeType === "Vector 4D") {
+            return "vector 4d"
+        } else if (nodeType === "Bool") {
+            return "bool"
+        } else if (nodeType === "Str") {
+            return "str"
+        } else if (nodeType === "Lookup") {
+            return "lookup"
+        }
+
+        return nodeType.length > 0 ? nodeType.toLowerCase() : "node"
+    }
+
+    function cloneLabelMap(labels) {
+        var copy = {}
+
+        if (!labels) {
+            return copy
+        }
+
+        for (var key in labels) {
+            copy[key] = labels[key]
+        }
+
+        return copy
+    }
+
+    function nodeDisplayLabel(node) {
+        if (!node) {
+            return "node"
+        }
+
+        if (node.displayName !== undefined && node.displayName.length > 0) {
+            return node.displayName
+        }
+
+        if (node.title !== undefined && node.title.length > 0) {
+            return node.title
+        }
+
+        return defaultNodeTitle(node.type || "")
+    }
+
+    function outputSocketLabelForModel(node, socketId) {
+        if (!node || !node.outputLabels) {
+            return socketId
+        }
+
+        if (node.outputLabels[socketId] !== undefined && node.outputLabels[socketId].length > 0) {
+            return node.outputLabels[socketId]
+        }
+
+        return socketId
+    }
+
     function createMathNode(nodeType) {
         var center = visibleCenterWorldPosition()
 
@@ -112,6 +218,8 @@ Item {
             "type": nodeType,
             "worldX": center.x,
             "worldY": center.y,
+            "displayName": "",
+            "outputLabels": {},
             "value": 0,
             "displayValue": ""
         })
@@ -126,6 +234,8 @@ Item {
             "type": nodeType,
             "worldX": center.x,
             "worldY": center.y,
+            "displayName": "",
+            "outputLabels": {},
             "value": 0,
             "displayValue": ""
         })
@@ -154,6 +264,8 @@ Item {
             "type": nodeType,
             "worldX": center.x,
             "worldY": center.y,
+            "displayName": "",
+            "outputLabels": {},
             "value": generatorDefaultValue(nodeType),
             "displayValue": ""
         })
@@ -168,6 +280,8 @@ Item {
             "type": nodeType,
             "worldX": center.x,
             "worldY": center.y,
+            "displayName": "",
+            "outputLabels": {},
             "value": 0,
             "displayValue": "No value connected"
         })
@@ -175,7 +289,33 @@ Item {
         requestConnectionPaint()
     }
 
+    function nodeItemAt(nodeIndex) {
+        for (var i = 0; i < nodeRepeater.count; i += 1) {
+            if (i !== nodeIndex) {
+                continue
+            }
+
+            var delegate = nodeRepeater.itemAt(i)
+
+            return delegate ? delegate.nodeItem : null
+        }
+
+        return null
+    }
+
+    function clearTextFocusOnSelectedNodes() {
+        for (var selectionIndex = 0; selectionIndex < selectedNodeIndices.length; selectionIndex += 1) {
+            var nodeItem = nodeItemAt(selectedNodeIndices[selectionIndex])
+
+            if (nodeItem && nodeItem.clearTextFocus) {
+                nodeItem.clearTextFocus()
+            }
+        }
+    }
+
     function deleteSelectedNodes() {
+        clearTextFocusOnSelectedNodes()
+
         if (selectedNodeIndices.length === 0) {
             if (hoveredNodeIndex < 0 || hoveredNodeIndex >= graphNodes.count) {
                 graphComputed("No selected nodes to delete", "INFO")
@@ -236,10 +376,6 @@ Item {
         computeGraph()
         requestConnectionPaint()
         graphComputed("Deleted " + deletedCount + (deletedCount === 1 ? " node" : " nodes"), "INFO")
-    }
-
-    function scenePointToCanvas(sceneX, sceneY) {
-        return mapFromItem(null, sceneX, sceneY)
     }
 
     function socketCanvasPosition(nodeIndex, socketSide, socketLabel) {
@@ -527,7 +663,9 @@ Item {
             return sourceDelegate.nodeItem.value.toString()
         }
 
-        return sourceDelegate.nodeItem.title + "." + sourceSocket
+        var sourceNode = graphNodes.get(sourceNodeIndex)
+
+        return nodeDisplayLabel(sourceNode) + "." + outputSocketLabelForModel(sourceNode, sourceSocket)
     }
 
     function updateLookupValue(targetNodeIndex, sourceNodeIndex, sourceSocket) {
@@ -577,8 +715,16 @@ Item {
                 nodeValue = nodeDelegate.nodeItem.value
             }
 
+            var outputLabels = cloneLabelMap(node.outputLabels)
+
+            if (nodeDelegate && nodeDelegate.nodeItem) {
+                outputLabels = cloneLabelMap(nodeDelegate.nodeItem.outputLabels)
+            }
+
             nodes.push({
                 "type": node.type,
+                "displayName": node.displayName || "",
+                "outputLabels": outputLabels,
                 "worldX": node.worldX,
                 "worldY": node.worldY,
                 "value": nodeValue,
@@ -610,11 +756,7 @@ Item {
         return {
             "format": "node.ai.project",
             "version": 1,
-            "view": {
-                "zoom": zoom,
-                "offsetX": offsetX,
-                "offsetY": offsetY
-            },
+            "view": viewportSnapshot(),
             "nodes": projectNodeSnapshot(),
             "connections": graphConnectionSnapshot()
         }
@@ -640,6 +782,8 @@ Item {
 
             graphNodes.append({
                 "type": node.type || "",
+                "displayName": node.displayName || node.title || "",
+                "outputLabels": cloneLabelMap(node.outputLabels),
                 "worldX": node.worldX || 0,
                 "worldY": node.worldY || 0,
                 "value": node.value === undefined ? 0 : node.value,
@@ -660,11 +804,7 @@ Item {
             })
         }
 
-        var projectView = project.view || {}
-        zoom = projectView.zoom || 1.0
-        offsetX = projectView.offsetX === undefined ? width / 2 : projectView.offsetX
-        offsetY = projectView.offsetY === undefined ? height / 2 : projectView.offsetY
-        requestGridPaint()
+        applyViewport(project.view)
         requestConnectionPaint()
         computeGraph()
         graphComputed("Project loaded", "INFO")
@@ -679,6 +819,8 @@ Item {
                 graphNodes.setProperty(nodeIndex, "displayValue", lookupValues[nodeIndexText])
             }
         }
+
+        lookupDisplayChanged()
     }
 
     function computeGraph() {
@@ -702,103 +844,6 @@ Item {
         return true
     }
 
-    function viewOrigin() {
-        zoom = 1.0
-        offsetX = width / 2
-        offsetY = height / 2
-        requestGridPaint()
-        requestConnectionPaint()
-    }
-
-    function zoomBy(factor) {
-        var nextZoom = clamp(zoom * factor, minZoom, maxZoom)
-        var centerX = width / 2
-        var centerY = height / 2
-        var worldX = (centerX - offsetX) / zoom
-        var worldY = (centerY - offsetY) / zoom
-
-        zoom = nextZoom
-        offsetX = centerX - worldX * zoom
-        offsetY = centerY - worldY * zoom
-        requestGridPaint()
-        requestConnectionPaint()
-    }
-
-    Canvas {
-        id: gridCanvas
-
-        anchors.fill: parent
-
-        Component.onCompleted: requestPaint()
-        onWidthChanged: requestPaint()
-        onHeightChanged: requestPaint()
-
-        onPaint: {
-            var ctx = getContext("2d")
-            ctx.reset()
-            ctx.fillStyle = root.backgroundColor
-            ctx.fillRect(0, 0, width, height)
-
-            var minorStep = Math.max(8, 32 * root.zoom)
-            var majorStep = minorStep * 5
-            var startX = ((root.offsetX % minorStep) + minorStep) % minorStep
-            var startY = ((root.offsetY % minorStep) + minorStep) % minorStep
-            var majorStartX = ((root.offsetX % majorStep) + majorStep) % majorStep
-            var majorStartY = ((root.offsetY % majorStep) + majorStep) % majorStep
-
-            ctx.translate(0.5, 0.5)
-            ctx.lineWidth = 1
-            ctx.strokeStyle = root.minorGridColor
-
-            for (var x = startX; x < width; x += minorStep) {
-                ctx.beginPath()
-                ctx.moveTo(x, 0)
-                ctx.lineTo(x, height)
-                ctx.stroke()
-            }
-
-            for (var y = startY; y < height; y += minorStep) {
-                ctx.beginPath()
-                ctx.moveTo(0, y)
-                ctx.lineTo(width, y)
-                ctx.stroke()
-            }
-
-            ctx.strokeStyle = root.majorGridColor
-
-            for (var majorX = majorStartX; majorX < width; majorX += majorStep) {
-                ctx.beginPath()
-                ctx.moveTo(majorX, 0)
-                ctx.lineTo(majorX, height)
-                ctx.stroke()
-            }
-
-            for (var majorY = majorStartY; majorY < height; majorY += majorStep) {
-                ctx.beginPath()
-                ctx.moveTo(0, majorY)
-                ctx.lineTo(width, majorY)
-                ctx.stroke()
-            }
-
-            ctx.strokeStyle = root.axisGridColor
-            ctx.lineWidth = 2
-
-            if (root.offsetX >= 0 && root.offsetX <= width) {
-                ctx.beginPath()
-                ctx.moveTo(root.offsetX, 0)
-                ctx.lineTo(root.offsetX, height)
-                ctx.stroke()
-            }
-
-            if (root.offsetY >= 0 && root.offsetY <= height) {
-                ctx.beginPath()
-                ctx.moveTo(0, root.offsetY)
-                ctx.lineTo(width, root.offsetY)
-                ctx.stroke()
-            }
-        }
-    }
-
     ListModel {
         id: graphNodes
     }
@@ -807,76 +852,6 @@ Item {
         id: graphConnections
 
         onCountChanged: requestConnectionPaint()
-    }
-
-    MouseArea {
-        id: panArea
-
-        property real lastX: 0
-        property real lastY: 0
-
-        anchors.fill: parent
-        acceptedButtons: Qt.LeftButton | Qt.MiddleButton | Qt.RightButton
-        hoverEnabled: true
-
-        onPressed: function(mouse) {
-            if (mouse.button === Qt.RightButton) {
-                root.startConnectionCut(mouse.x, mouse.y)
-                cursorShape = Qt.CrossCursor
-                mouse.accepted = true
-                return
-            }
-
-            root.clearSelection()
-            lastX = mouse.x
-            lastY = mouse.y
-            cursorShape = Qt.ClosedHandCursor
-        }
-
-        onReleased: function(mouse) {
-            if (mouse.button === Qt.RightButton) {
-                root.finishConnectionCut()
-            }
-
-            cursorShape = Qt.ArrowCursor
-        }
-
-        onCanceled: {
-            cursorShape = Qt.ArrowCursor
-        }
-
-        onPositionChanged: function(mouse) {
-            if (!pressed) {
-                return
-            }
-
-            if ((mouse.buttons & Qt.RightButton) !== 0) {
-                root.dragConnectionCut(mouse.x, mouse.y)
-                return
-            }
-
-            root.offsetX += mouse.x - lastX
-            root.offsetY += mouse.y - lastY
-            lastX = mouse.x
-            lastY = mouse.y
-            root.requestGridPaint()
-            root.requestConnectionPaint()
-        }
-
-        onWheel: function(wheel) {
-            var oldZoom = root.zoom
-            var factor = wheel.angleDelta.y > 0 ? 1.1 : 0.9
-            var nextZoom = root.clamp(oldZoom * factor, root.minZoom, root.maxZoom)
-            var worldX = (wheel.x - root.offsetX) / oldZoom
-            var worldY = (wheel.y - root.offsetY) / oldZoom
-
-            root.zoom = nextZoom
-            root.offsetX = wheel.x - worldX * root.zoom
-            root.offsetY = wheel.y - worldY * root.zoom
-            root.requestGridPaint()
-            root.requestConnectionPaint()
-            wheel.accepted = true
-        }
     }
 
     Canvas {
@@ -985,9 +960,16 @@ Item {
 
             Binding {
                 target: nodeLoader.item
-                property: "valueText"
-                value: model.displayValue || "No value connected"
-                when: nodeLoader.item !== null && model.type === "Lookup"
+                property: "displayName"
+                value: model.displayName || ""
+                when: nodeLoader.item !== null && !nodeLoader.item.renaming
+            }
+
+            Binding {
+                target: nodeLoader.item
+                property: "outputLabels"
+                value: root.cloneLabelMap(model.outputLabels)
+                when: nodeLoader.item !== null && !nodeLoader.item.renaming
             }
 
             Connections {
@@ -1000,6 +982,18 @@ Item {
 
                 function onDeleteRequested() {
                     root.deleteSelectedNodes()
+                }
+
+                function onDisplayNameEdited(newDisplayName) {
+                    graphNodes.setProperty(index, "displayName", newDisplayName)
+                    root.lookupDisplayChanged()
+                    root.updateConnectedLookupValues(index)
+                }
+
+                function onOutputLabelsEdited(labels) {
+                    graphNodes.setProperty(index, "outputLabels", root.cloneLabelMap(labels))
+                    root.lookupDisplayChanged()
+                    root.updateConnectedLookupValues(index)
                 }
 
                 function onNodeHoverChanged(hovered) {
@@ -1196,30 +1190,5 @@ Item {
         id: lookupNodeComponent
 
         LookupNode {}
-    }
-
-    Label {
-        anchors.centerIn: parent
-        text: ""
-        color: root.textColor
-        font.pixelSize: 28
-    }
-
-    Rectangle {
-        anchors.left: parent.left
-        anchors.top: parent.top
-        anchors.margins: 12
-        width: 220
-        height: 30
-        radius: 4
-        color: root.colors.overlayBackground
-        border.color: root.colors.panelBorder
-
-        Label {
-            anchors.centerIn: parent
-            color: root.textColor
-            font.pixelSize: 11
-            text: "Pan: drag background  |  Move: drag node  |  Zoom: mouse wheel"
-        }
     }
 }

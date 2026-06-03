@@ -13,7 +13,7 @@ Node {
 
     width: 430
     height: 240
-    title: "random int"
+    defaultTitle: "random int"
     category: ""
     inputSockets: []
     outputSockets: ["Name"]
@@ -45,9 +45,10 @@ Node {
         border.width: 1
         radius: 3
 
-        TextInput {
+        NodeTextInput {
             id: shapeInput
 
+            nodeTarget: root
             anchors.fill: parent
             anchors.leftMargin: 8
             anchors.rightMargin: 8
@@ -100,9 +101,10 @@ Node {
                 border.width: 1
                 radius: 3
 
-                TextInput {
+                NodeTextInput {
                     id: fieldInput
 
+                    nodeTarget: root
                     anchors.fill: parent
                     anchors.leftMargin: 8
                     anchors.rightMargin: 8

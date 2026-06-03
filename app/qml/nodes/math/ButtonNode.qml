@@ -12,7 +12,7 @@ Node {
 
     width: 360
     height: 190
-    title: "button"
+    defaultTitle: "button"
     category: ""
     inputSockets: []
     outputSockets: ["Name"]

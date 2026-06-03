@@ -28,6 +28,7 @@ class GraphRuntime(QObject):
         "Str",
         "Button",
     }
+    
     GENERATOR_NODE_TYPES = {
         "Random",
         "Random Like",

@@ -12,7 +12,7 @@ Node {
 
     width: 430
     height: 170
-    title: "bool"
+    defaultTitle: "bool"
     category: ""
     inputSockets: []
     outputSockets: ["Name"]

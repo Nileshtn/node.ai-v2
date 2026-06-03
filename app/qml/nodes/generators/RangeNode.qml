@@ -13,7 +13,7 @@ Node {
 
     width: 460
     height: 190
-    title: "range"
+    defaultTitle: "range"
     category: ""
     inputSockets: []
     outputSockets: ["Name"]
@@ -44,9 +44,10 @@ Node {
                 border.width: 1
                 radius: 3
 
-                TextInput {
+                NodeTextInput {
                     id: fieldInput
 
+                    nodeTarget: root
                     anchors.fill: parent
                     anchors.leftMargin: 8
                     anchors.rightMargin: 8
