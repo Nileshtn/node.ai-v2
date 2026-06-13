@@ -21,6 +21,12 @@ Node {
         value = isNaN(nextValue) ? 0 : nextValue
     }
 
+    onValueChanged: {
+        if (isNaN(value)) {
+            value = 0
+        }
+    }
+
     Rectangle {
         Layout.preferredWidth: root.controlWidth
         Layout.minimumWidth: root.controlWidth

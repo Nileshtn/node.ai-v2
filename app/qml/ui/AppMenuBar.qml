@@ -200,6 +200,7 @@ Rectangle {
             mathMenu.close()
             varMenu.close()
             generatorMenu.close()
+            conditionMenu.close()
         }
 
         background: Rectangle {
@@ -219,11 +220,13 @@ Rectangle {
                 onHovered: {
                     varMenu.close()
                     generatorMenu.close()
+                    conditionMenu.close()
                     mathMenu.open()
                 }
                 onTriggered: {
                     varMenu.close()
                     generatorMenu.close()
+                    conditionMenu.close()
                     mathMenu.open()
                 }
             }
@@ -235,11 +238,13 @@ Rectangle {
                 onHovered: {
                     mathMenu.close()
                     generatorMenu.close()
+                    conditionMenu.close()
                     varMenu.open()
                 }
                 onTriggered: {
                     mathMenu.close()
                     generatorMenu.close()
+                    conditionMenu.close()
                     varMenu.open()
                 }
             }
@@ -251,12 +256,32 @@ Rectangle {
                 onHovered: {
                     mathMenu.close()
                     varMenu.close()
+                    conditionMenu.close()
                     generatorMenu.open()
                 }
                 onTriggered: {
                     mathMenu.close()
                     varMenu.close()
+                    conditionMenu.close()
                     generatorMenu.open()
+                }
+            }
+
+            AppMenuItem {
+                text: "Condition"
+                hasSubmenu: true
+
+                onHovered: {
+                    mathMenu.close()
+                    varMenu.close()
+                    generatorMenu.close()
+                    conditionMenu.open()
+                }
+                onTriggered: {
+                    mathMenu.close()
+                    varMenu.close()
+                    generatorMenu.close()
+                    conditionMenu.open()
                 }
             }
 
@@ -267,11 +292,13 @@ Rectangle {
                     mathMenu.close()
                     varMenu.close()
                     generatorMenu.close()
+                    conditionMenu.close()
                 }
                 onTriggered: {
                     mathMenu.close()
                     varMenu.close()
                     generatorMenu.close()
+                    conditionMenu.close()
                     nodeMenu.close()
                     root.actionTriggered("Lookup")
                 }
@@ -325,6 +352,22 @@ Rectangle {
             { "text": "Zeros Like" },
             { "text": "Random Int" },
             { "text": "Range" }
+        ]
+    }
+
+    AppMenuPopup {
+        id: conditionMenu
+
+        closeWith: nodeMenu
+        x: nodeMenu.x + nodeMenu.width + width < root.width ? nodeMenu.x + nodeMenu.width - 2 : nodeMenu.x - width + 2
+        y: nodeMenu.y + nodeMenu.padding + 84
+        actions: [
+            { "text": "If Else" },
+            { "text": "Switch" },
+            { "text": "Compare" },
+            { "text": "And" },
+            { "text": "Or" },
+            { "text": "Not" }
         ]
     }
 

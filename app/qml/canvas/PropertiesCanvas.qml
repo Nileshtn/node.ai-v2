@@ -223,6 +223,7 @@ GraphCanvas {
                     vectorRow.visible = kind === "vector"
                     randomIntRow.visible = kind === "randomInt"
                     rangeRow.visible = kind === "range"
+                    compareRow.visible = kind === "compare"
 
                     if (kind === "int" || kind === "float" || kind === "text" || kind === "shape") {
                         scalarCaption.text = kind === "shape" ? "Shape" : (kind === "text" ? "Text" : "Number")
@@ -253,6 +254,8 @@ GraphCanvas {
                         startValueInput.text = value && value.start !== undefined ? value.start.toString() : "0"
                         stopValueInput.text = value && value.stop !== undefined ? value.stop.toString() : "10"
                         stepValueInput.text = value && value.step !== undefined ? value.step.toString() : "1"
+                    } else if (kind === "compare") {
+                        compareOpLabel.text = compareRow.labelForOp(value && value.op !== undefined ? value.op : "eq")
                     }
                 }
 
@@ -584,6 +587,89 @@ GraphCanvas {
                             selectByMouse: true
                             onEditingFinished: rangeRow.commitRange()
                             onActiveFocusChanged: if (!activeFocus) rangeRow.commitRange()
+                        }
+                    }
+                }
+
+                RowLayout {
+                    id: compareRow
+
+                    Layout.fillWidth: true
+                    visible: false
+                    spacing: 8
+
+                    readonly property var compareOps: ["eq", "neq", "lt", "lte", "gt", "gte"]
+
+                    function labelForOp(op) {
+                        if (op === "eq") {
+                            return "Equals (==)"
+                        }
+
+                        if (op === "neq") {
+                            return "Not equal (!=)"
+                        }
+
+                        if (op === "lt") {
+                            return "Less than (<)"
+                        }
+
+                        if (op === "lte") {
+                            return "Less or equal (<=)"
+                        }
+
+                        if (op === "gt") {
+                            return "Greater than (>)"
+                        }
+
+                        if (op === "gte") {
+                            return "Greater or equal (>=)"
+                        }
+
+                        return "Equals (==)"
+                    }
+
+                    function cycleCompareOp() {
+                        if (root.syncingFromModel || !graphCanvas || !graphCanvas.updateSelectedNodeValue) {
+                            return
+                        }
+
+                        var current = nodeProperties.value && nodeProperties.value.op !== undefined
+                                ? nodeProperties.value.op
+                                : "eq"
+                        var nextIndex = (compareOps.indexOf(current) + 1) % compareOps.length
+
+                        graphCanvas.updateSelectedNodeValue({ "op": compareOps[nextIndex] })
+                    }
+
+                    Label {
+                        Layout.fillWidth: true
+                        text: "Operator"
+                        color: colors.textMuted
+                        font.pixelSize: 10
+                    }
+
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 30
+                        color: compareMouseArea.containsMouse ? colors.menuButtonHover : colors.nodeControlBackground
+                        border.color: colors.nodeControlBorder
+                        border.width: 1
+                        radius: 3
+
+                        Label {
+                            id: compareOpLabel
+
+                            anchors.centerIn: parent
+                            color: colors.nodeControlText
+                            font.pixelSize: 12
+                        }
+
+                        MouseArea {
+                            id: compareMouseArea
+
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onClicked: compareRow.cycleCompareOp()
                         }
                     }
                 }

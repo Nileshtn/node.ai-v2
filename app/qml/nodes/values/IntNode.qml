@@ -27,6 +27,12 @@ Node {
         value = Math.trunc(nextValue)
     }
 
+    onValueChanged: {
+        if (isNaN(value)) {
+            value = 0
+        }
+    }
+
     RowLayout {
         Layout.preferredWidth: root.controlWidth
         Layout.minimumWidth: root.controlWidth

@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import "../nodes/condition"
 import "../nodes/generators"
 import "../nodes/math"
 import "../nodes/utility"
@@ -168,6 +169,18 @@ GraphCanvas {
             return "str"
         } else if (nodeType === "Lookup") {
             return "lookup"
+        } else if (nodeType === "If Else") {
+            return "if else"
+        } else if (nodeType === "Switch") {
+            return "switch"
+        } else if (nodeType === "Compare") {
+            return "compare"
+        } else if (nodeType === "And") {
+            return "and"
+        } else if (nodeType === "Or") {
+            return "or"
+        } else if (nodeType === "Not") {
+            return "not"
         }
 
         return nodeType.length > 0 ? nodeType.toLowerCase() : "node"
@@ -237,6 +250,80 @@ GraphCanvas {
         return value
     }
 
+    function defaultValueForNodeType(nodeType) {
+        if (nodeType === "Compare") {
+            return conditionDefaultValue("Compare")
+        }
+
+        if (nodeType === "Str") {
+            return ""
+        }
+
+        if (nodeType === "Bool") {
+            return false
+        }
+
+        if (nodeType === "Vector 2D") {
+            return [0, 0]
+        }
+
+        if (nodeType === "Vector 3D") {
+            return [0, 0, 0]
+        }
+
+        if (nodeType === "Vector 4D") {
+            return [0, 0, 0, 0]
+        }
+
+        var generatorValue = generatorDefaultValue(nodeType)
+
+        if (Object.keys(generatorValue).length > 0) {
+            return generatorValue
+        }
+
+        return 0
+    }
+
+    function encodeStoredNodeValue(value) {
+        return JSON.stringify(value === undefined ? null : value)
+    }
+
+    function decodeStoredNodeValue(stored, nodeType) {
+        if (stored === undefined || stored === null || stored === "") {
+            return defaultValueForNodeType(nodeType || "")
+        }
+
+        if (typeof stored === "string") {
+            try {
+                var parsed = JSON.parse(stored)
+
+                if (parsed === null) {
+                    return defaultValueForNodeType(nodeType || "")
+                }
+
+                return parsed
+            } catch (error) {
+                return defaultValueForNodeType(nodeType || "")
+            }
+        }
+
+        return clonePanelValue(stored)
+    }
+
+    property var nodeValueSyncGuard: ({})
+
+    function pushNodeValueToItem(nodeIndex, value) {
+        var item = nodeItemAt(nodeIndex)
+
+        if (!item || item.value === undefined) {
+            return
+        }
+
+        nodeValueSyncGuard[nodeIndex] = true
+        applyNodeValue(item, value)
+        delete nodeValueSyncGuard[nodeIndex]
+    }
+
     function valueEditorSpec(nodeType) {
         if (nodeType === "Int") {
             return { "kind": "int" }
@@ -258,6 +345,8 @@ GraphCanvas {
             return { "kind": "randomInt" }
         } else if (nodeType === "Range") {
             return { "kind": "range" }
+        } else if (nodeType === "Compare") {
+            return { "kind": "compare" }
         }
 
         return { "kind": "none" }
@@ -296,7 +385,13 @@ GraphCanvas {
         }
 
         var node = graphNodes.get(nodeIndex)
+        var nodeValue = decodeStoredNodeValue(node.value, node.type)
         var item = nodeItemAt(nodeIndex)
+
+        if (item && item.value !== undefined) {
+            nodeValue = item.value
+        }
+
         var socketIds = outputSocketIdsForNode(nodeIndex, node.type)
         var outputs = []
 
@@ -307,12 +402,6 @@ GraphCanvas {
                 "socketId": socketId,
                 "label": outputSocketLabelForModel(node, socketId)
             })
-        }
-
-        var nodeValue = node.value
-
-        if (item && item.value !== undefined) {
-            nodeValue = item.value
         }
 
         return {
@@ -382,9 +471,8 @@ GraphCanvas {
 
         var savedValue = clonePanelValue(value)
 
-        graphNodes.setProperty(selectedNodeIndex, "value", savedValue)
-
-        applyNodeValue(nodeItemAt(selectedNodeIndex), savedValue)
+        graphNodes.setProperty(selectedNodeIndex, "value", encodeStoredNodeValue(savedValue))
+        pushNodeValueToItem(selectedNodeIndex, savedValue)
         updateConnectedLookupValues(selectedNodeIndex)
     }
 
@@ -395,7 +483,7 @@ GraphCanvas {
 
         var node = graphNodes.get(selectedNodeIndex)
         var item = nodeItemAt(selectedNodeIndex)
-        var current = node.value
+        var current = decodeStoredNodeValue(node.value, node.type)
 
         if (item && item.value !== undefined) {
             current = item.value
@@ -424,7 +512,7 @@ GraphCanvas {
             "worldY": center.y,
             "displayName": "",
             "outputLabels": {},
-            "value": 0,
+            "value": encodeStoredNodeValue(0),
             "displayValue": ""
         })
         selectNode(graphNodes.count - 1, false)
@@ -440,7 +528,7 @@ GraphCanvas {
             "worldY": center.y,
             "displayName": "",
             "outputLabels": {},
-            "value": 0,
+            "value": encodeStoredNodeValue(defaultValueForNodeType(nodeType)),
             "displayValue": ""
         })
         selectNode(graphNodes.count - 1, false)
@@ -470,7 +558,7 @@ GraphCanvas {
             "worldY": center.y,
             "displayName": "",
             "outputLabels": {},
-            "value": generatorDefaultValue(nodeType),
+            "value": encodeStoredNodeValue(generatorDefaultValue(nodeType)),
             "displayValue": ""
         })
         selectNode(graphNodes.count - 1, false)
@@ -486,8 +574,32 @@ GraphCanvas {
             "worldY": center.y,
             "displayName": "",
             "outputLabels": {},
-            "value": 0,
+            "value": encodeStoredNodeValue(0),
             "displayValue": "No value connected"
+        })
+        selectNode(graphNodes.count - 1, false)
+        requestConnectionPaint()
+    }
+
+    function conditionDefaultValue(nodeType) {
+        if (nodeType === "Compare") {
+            return { "op": "eq" }
+        }
+
+        return 0
+    }
+
+    function createConditionNode(nodeType) {
+        var center = visibleCenterWorldPosition()
+
+        graphNodes.append({
+            "type": nodeType,
+            "worldX": center.x,
+            "worldY": center.y,
+            "displayName": "",
+            "outputLabels": {},
+            "value": encodeStoredNodeValue(conditionDefaultValue(nodeType)),
+            "displayValue": ""
         })
         selectNode(graphNodes.count - 1, false)
         requestConnectionPaint()
@@ -523,6 +635,10 @@ GraphCanvas {
     }
 
     function syncNodeValueToModel(nodeIndex) {
+        if (nodeValueSyncGuard[nodeIndex]) {
+            return
+        }
+
         if (nodeIndex < 0 || nodeIndex >= graphNodes.count) {
             return
         }
@@ -533,7 +649,14 @@ GraphCanvas {
             return
         }
 
-        graphNodes.setProperty(nodeIndex, "value", clonePanelValue(item.value))
+        var encoded = encodeStoredNodeValue(clonePanelValue(item.value))
+        var node = graphNodes.get(nodeIndex)
+
+        if (node.value === encoded) {
+            return
+        }
+
+        graphNodes.setProperty(nodeIndex, "value", encoded)
     }
 
     function clearTextFocusOnSelectedNodes() {
@@ -931,7 +1054,7 @@ GraphCanvas {
         for (var nodeIndex = 0; nodeIndex < graphNodes.count; nodeIndex += 1) {
             var node = graphNodes.get(nodeIndex)
             var nodeDelegate = nodeRepeater.itemAt(nodeIndex)
-            var nodeValue = node.value === undefined ? 0 : node.value
+            var nodeValue = decodeStoredNodeValue(node.value, node.type)
 
             if (nodeDelegate && nodeDelegate.nodeItem && nodeDelegate.nodeItem.value !== undefined) {
                 nodeValue = nodeDelegate.nodeItem.value
@@ -952,7 +1075,7 @@ GraphCanvas {
         for (var nodeIndex = 0; nodeIndex < graphNodes.count; nodeIndex += 1) {
             var node = graphNodes.get(nodeIndex)
             var nodeDelegate = nodeRepeater.itemAt(nodeIndex)
-            var nodeValue = node.value === undefined ? 0 : node.value
+            var nodeValue = decodeStoredNodeValue(node.value, node.type)
 
             if (nodeDelegate && nodeDelegate.nodeItem && nodeDelegate.nodeItem.value !== undefined) {
                 nodeValue = nodeDelegate.nodeItem.value
@@ -1029,7 +1152,7 @@ GraphCanvas {
                 "outputLabels": cloneLabelMap(node.outputLabels),
                 "worldX": node.worldX || 0,
                 "worldY": node.worldY || 0,
-                "value": node.value === undefined ? 0 : node.value,
+                "value": encodeStoredNodeValue(node.value === undefined ? defaultValueForNodeType(node.type || "") : node.value),
                 "displayValue": node.displayValue || ""
             })
         }
@@ -1192,9 +1315,7 @@ GraphCanvas {
                         return
                     }
 
-                    if (item.value !== undefined && model.value !== undefined) {
-                        item.value = model.value
-                    }
+                    root.pushNodeValueToItem(index, root.decodeStoredNodeValue(model.value, model.type))
 
                     item.graphCanvas = root
                     item.displayName = model.displayName || ""
@@ -1228,13 +1349,6 @@ GraphCanvas {
                 property: "outputLabels"
                 value: root.cloneLabelMap(model.outputLabels)
                 when: nodeLoader.item !== null
-            }
-
-            Binding {
-                target: nodeLoader.item
-                property: "value"
-                value: root.clonePanelValue(model.value)
-                when: nodeLoader.item !== null && nodeLoader.item.value !== undefined
             }
 
             Connections {
@@ -1345,6 +1459,18 @@ GraphCanvas {
             return strNodeComponent
         } else if (nodeType === "Lookup") {
             return lookupNodeComponent
+        } else if (nodeType === "If Else") {
+            return ifElseNodeComponent
+        } else if (nodeType === "Switch") {
+            return switchNodeComponent
+        } else if (nodeType === "Compare") {
+            return compareNodeComponent
+        } else if (nodeType === "And") {
+            return andNodeComponent
+        } else if (nodeType === "Or") {
+            return orNodeComponent
+        } else if (nodeType === "Not") {
+            return notNodeComponent
         }
 
         return addNodeComponent
@@ -1468,5 +1594,41 @@ GraphCanvas {
         id: lookupNodeComponent
 
         LookupNode {}
+    }
+
+    Component {
+        id: ifElseNodeComponent
+
+        IfElseNode {}
+    }
+
+    Component {
+        id: switchNodeComponent
+
+        SwitchNode {}
+    }
+
+    Component {
+        id: compareNodeComponent
+
+        CompareNode {}
+    }
+
+    Component {
+        id: andNodeComponent
+
+        AndNode {}
+    }
+
+    Component {
+        id: orNodeComponent
+
+        OrNode {}
+    }
+
+    Component {
+        id: notNodeComponent
+
+        NotNode {}
     }
 }

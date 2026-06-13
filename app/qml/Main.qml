@@ -267,6 +267,10 @@ ApplicationWindow {
 
                     canvas.createVarNode(action)
 
+                } else if (action === "If Else" || action === "Switch" || action === "Compare" || action === "And" || action === "Or" || action === "Not") {
+
+                    canvas.createConditionNode(action)
+
                 } else if (action === "Lookup") {
 
                     canvas.createUtilityNode("Lookup")
